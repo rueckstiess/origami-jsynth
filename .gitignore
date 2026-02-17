@@ -1,0 +1,21 @@
+# Virtual environments
+.venv/
+
+# Claude Code
+.claude/
+
+# Results (generated data, checkpoints, samples, reports)
+results/
+
+# Python
+__pycache__/
+.ruff_cache/
+*.pyc
+*.egg-info/
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
