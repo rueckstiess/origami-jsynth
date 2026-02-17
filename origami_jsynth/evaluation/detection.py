@@ -120,6 +120,7 @@ def compute_detection(
     # Cross-validated detection
     kf = StratifiedKFold(n_splits=actual_splits, shuffle=True, random_state=random_state)
     scores = []
+    raw_aucs = []
     fold_importances = []
 
     for train_idx, test_idx in kf.split(X, y):
@@ -141,11 +142,12 @@ def compute_detection(
             raise ValueError(f"Unsupported method: {method}")
 
         roc_auc = roc_auc_score(y[test_idx], y_pred_proba)
+        raw_aucs.append(roc_auc)
         # SDMetrics formula: clamp to [0.5, 1.0], transform to [0, 1]
         scores.append(max(0.5, roc_auc) * 2 - 1)
 
     detection_score = 1 - np.mean(scores)
-    mean_roc_auc = 1 - detection_score / 2
+    mean_roc_auc = float(np.mean(raw_aucs))
 
     # Average feature importances across folds
     feature_importances: dict[str, float] = {}
