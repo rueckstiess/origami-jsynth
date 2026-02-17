@@ -4,7 +4,7 @@ Minimal reproduction package for Origami tabular/JSON synthesis experiments.
 
 ## Setup
 
-Requires Python 3.12+. MPS (Apple Silicon) or CUDA-capable GPU recommended for training, but CPU-only is possible for small datasets.
+Requires Python 3.11+. MPS (Apple Silicon) or CUDA-capable GPU recommended for training, but CPU-only is possible for small datasets.
 
 ```bash
 pip install -e .
