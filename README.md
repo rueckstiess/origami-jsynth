@@ -4,7 +4,7 @@ Minimal reproduction package for Origami tabular/JSON synthesis experiments.
 
 ## Setup
 
-Requires Python 3.12+. MPS (MacOS) or CUDA-capable GPU recommended) for training, but CPU-only is possible for small datasets.
+Requires Python 3.12+. MPS (Apple Silicon) or CUDA-capable GPU recommended for training, but CPU-only is possible for small datasets.
 
 ```bash
 pip install -e .
@@ -15,7 +15,7 @@ pip install -e .
 Run the full pipeline for a dataset:
 
 ```bash
-origami-jsynth all --dataset adult
+origami-jsynth all --dataset adult  # diabetes, electric_vehicles, ddxplus, mtg, yelp
 ```
 
 Or run each step individually:
@@ -29,6 +29,16 @@ origami-jsynth eval --dataset adult
 
 Results are saved to `./results/<dataset>/`.
 
+## Quick Sanity Check
+
+To verify the full pipeline works end-to-end (splitting, training, sampling, evaluation):
+
+```bash
+origami-jsynth all --dataset adult --replicates 2 --param training.num_epochs=5
+```
+
+This completes in approximately 5 minutes with an MPS or CUDA device. The evaluation results from this quick run are not representative of the final results reported in the paper, which require significantly longer training (~500 epochs on the adult dataset).
+
 ## Replicates
 
 To measure variance in evaluation metrics, use `--replicates` (`-R`) to run multiple independent sampling rounds with different seeds:
@@ -38,9 +48,11 @@ origami-jsynth sample --dataset adult --replicates 10
 origami-jsynth eval --dataset adult
 ```
 
+The default in this package is `--replicates 1` for a quick run, but the paper results use `--replicates 10` for all datasets.
+
 This produces `synthetic_1.jsonl` through `synthetic_10.jsonl` in the samples directory. The `eval` command automatically discovers all replicate files, evaluates each independently, and reports aggregate statistics (mean and standard deviation). Results are saved as individual `results_{i}.json` files plus an `agg_results.json` with the aggregate summary.
 
-Sampling is resumable: if interrupted, re-running the same command will skip replicates that already have output files.
+Sampling is resumable: if interrupted, re-running the same command will skip replicates that already have completed.
 
 ## DCR Privacy Evaluation
 
