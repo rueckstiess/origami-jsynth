@@ -23,7 +23,7 @@ training:
   eval_steps: 1000
   eval_strategy: steps
   learning_rate: 0.0005
-  mixed_precision: fp16
+  mixed_precision: no
   num_epochs: 150
   shuffle_keys: true
   target_loss_weight: 1.0

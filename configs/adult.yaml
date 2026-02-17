@@ -17,6 +17,7 @@ model:
 training:
   batch_size: 128
   learning_rate: 0.0001
+  mixed_precision: no
   dataloader_num_workers: 0
   num_epochs: 400
   warmup_steps: 1000
