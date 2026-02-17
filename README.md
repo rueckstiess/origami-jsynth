@@ -29,6 +29,19 @@ origami-jsynth eval --dataset adult
 
 Results are saved to `./results/<dataset>/`.
 
+## Replicates
+
+To measure variance in evaluation metrics, use `--replicates` (`-R`) to run multiple independent sampling rounds with different seeds:
+
+```bash
+origami-jsynth sample --dataset adult --replicates 10
+origami-jsynth eval --dataset adult
+```
+
+This produces `synthetic_1.jsonl` through `synthetic_10.jsonl` in the samples directory. The `eval` command automatically discovers all replicate files, evaluates each independently, and reports aggregate statistics (mean and standard deviation). Results are saved as individual `results_{i}.json` files plus an `agg_results.json` with the aggregate summary.
+
+Sampling is resumable: if interrupted, re-running the same command will skip replicates that already have output files.
+
 ## DCR Privacy Evaluation
 
 To evaluate privacy using Distance to Closest Record (DCR), use the `--dcr` flag. This creates a 50/50 train/test split and evaluates privacy only:
@@ -75,7 +88,8 @@ Options:
   --dataset       Dataset name (adult, diabetes, electric_vehicles, ddxplus, mtg, yelp)
   --output-dir    Base output directory (default: ./results)
   --dcr           DCR mode: 50/50 split, privacy evaluation only
-  --num-workers   Number of parallel sampling workers (default: 4, sample/all commands only)
+  --num-workers   Number of parallel sampling workers (default: 4, sample/all only)
+  -R, --replicates  Number of independent sampling rounds (default: 1, sample/all only)
 ```
 
 ## Output Structure
@@ -89,7 +103,10 @@ results/
     ├── checkpoints/
     │   └── final.pt
     ├── samples/
-    │   └── synthetic.jsonl
+    │   ├── synthetic_1.jsonl
+    │   └── ...                  # synthetic_{N}.jsonl when using --replicates N
     └── report/
-        └── results.json
+        ├── results_1.json
+        ├── ...                  # results_{N}.json when using --replicates N
+        └── agg_results.json
 ```

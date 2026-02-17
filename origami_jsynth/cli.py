@@ -68,10 +68,13 @@ def _require_model(paths: dict[str, Path], args: argparse.Namespace) -> None:
 
 def _require_samples(paths: dict[str, Path], args: argparse.Namespace) -> None:
     """Check that synthetic samples exist, exit with helpful message if not."""
-    synthetic_path = paths["samples_dir"] / "synthetic.jsonl"
-    if not synthetic_path.exists():
+    has_samples = (
+        paths["samples_dir"].exists()
+        and any(paths["samples_dir"].glob("synthetic_*.jsonl"))
+    )
+    if not has_samples:
         print(
-            f"Error: Synthetic data not found at {synthetic_path}\n\n"
+            f"Error: No synthetic_*.jsonl files found in {paths['samples_dir']}\n\n"
             f"Run this first:\n"
             f"  origami-jsynth sample --dataset {args.dataset}{_dcr_flag(args)}",
             file=sys.stderr,
@@ -127,6 +130,7 @@ def cmd_sample(args: argparse.Namespace) -> None:
         num_workers=args.num_workers,
         tabular=info.tabular,
         data_dir=paths["data_dir"],
+        replicates=args.replicates,
     )
 
 
@@ -191,6 +195,10 @@ def main() -> None:
     p_sample = subparsers.add_parser("sample", help="Generate synthetic data")
     add_common_args(p_sample)
     p_sample.add_argument("--num-workers", type=int, default=4, help="Number of parallel workers")
+    p_sample.add_argument(
+        "-R", "--replicates", type=int, default=1,
+        help="Number of independent sampling rounds (default: 1)",
+    )
     p_sample.set_defaults(func=cmd_sample)
 
     # eval
@@ -202,6 +210,10 @@ def main() -> None:
     p_all = subparsers.add_parser("all", help="Run full pipeline: data -> train -> sample -> eval")
     add_common_args(p_all)
     p_all.add_argument("--num-workers", type=int, default=4, help="Number of parallel workers")
+    p_all.add_argument(
+        "-R", "--replicates", type=int, default=1,
+        help="Number of independent sampling rounds (default: 1)",
+    )
     p_all.add_argument(
         "--param",
         action="append",

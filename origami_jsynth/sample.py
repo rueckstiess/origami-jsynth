@@ -18,6 +18,7 @@ def sample_parallel(
     num_workers: int = 4,
     batch_size: int = 100,
     verbose: bool = True,
+    seed: int | None = None,
     **sample_kwargs: Any,
 ) -> list[dict[str, Any]]:
     """Generate synthetic samples in parallel using multiple processes.
@@ -31,6 +32,7 @@ def sample_parallel(
         num_workers: Number of parallel worker processes.
         batch_size: Number of samples per generate() call within each worker.
         verbose: Print progress updates (~5 per worker).
+        seed: Random seed for reproducibility. Each worker uses seed + worker_index.
         **sample_kwargs: Additional keyword arguments passed to generate().
 
     Returns:
@@ -52,8 +54,16 @@ def sample_parallel(
             out_file = Path(tmpdir) / f"part_{i}.jsonl"
             kwargs_str = ", ".join(f"{k}={v!r}" for k, v in sample_kwargs.items())
             sample_args_suffix = ", " + kwargs_str if kwargs_str else ""
+            seed_lines = ""
+            if seed is not None:
+                worker_seed = seed + i
+                seed_lines = (
+                    "import torch\n"
+                    f"torch.manual_seed({worker_seed})\n"
+                )
             script = (
                 "import json\n"
+                f"{seed_lines}"
                 "from origami import OrigamiPipeline\n"
                 f"pipeline = OrigamiPipeline.load({model_path!r})\n"
                 f"total = {worker_n}\n"
@@ -107,30 +117,28 @@ def sample_dataset(
     tabular: bool = True,
     n_train: int | None = None,
     data_dir: Path | None = None,
-) -> Path:
+    replicates: int = 1,
+    seed_base: int = 42,
+) -> list[Path]:
     """Sample from a trained model and save results.
 
     Args:
         dataset: Dataset name (for logging).
         checkpoint_dir: Directory containing the trained model.
-        samples_dir: Directory to save synthetic.jsonl.
+        samples_dir: Directory to save synthetic_{i}.jsonl files.
         num_workers: Number of parallel sampling workers.
         batch_size: Batch size per worker.
         tabular: Whether dataset is tabular (affects allow_complex_values).
         n_train: Number of training records (determines sample count).
             If None, reads from data_dir/train.jsonl.
         data_dir: Directory containing train.jsonl (used if n_train is None).
+        replicates: Number of independent sampling rounds.
+        seed_base: Base seed for reproducibility. Replicate i uses seed_base + i - 1.
 
     Returns:
-        Path to the synthetic.jsonl file.
+        List of paths to the synthetic_{i}.jsonl files.
     """
     samples_dir.mkdir(parents=True, exist_ok=True)
-    output_path = samples_dir / "synthetic.jsonl"
-
-    if output_path.exists():
-        existing = load_jsonl(output_path)
-        print(f"Samples already exist at {output_path} ({len(existing)} records)")
-        return output_path
 
     # Find the model
     model_path = checkpoint_dir / "final.pt"
@@ -146,20 +154,42 @@ def sample_dataset(
         train_records = load_jsonl(data_dir / "train.jsonl")
         n_train = len(train_records)
 
-    print(f"Sampling {n_train} records from {model_path} ({num_workers} workers)...")
-
     sample_kwargs = {}
     if not tabular:
         sample_kwargs["allow_complex_values"] = True
 
-    records = sample_parallel(
-        model_path,
-        n=n_train,
-        num_workers=num_workers,
-        batch_size=batch_size,
-        **sample_kwargs,
-    )
+    output_paths: list[Path] = []
+    for i in range(1, replicates + 1):
+        output_path = samples_dir / f"synthetic_{i}.jsonl"
+        output_paths.append(output_path)
 
-    save_jsonl(records, output_path)
-    print(f"Saved {len(records)} synthetic records to {output_path}")
-    return output_path
+        if output_path.exists():
+            existing = load_jsonl(output_path)
+            if len(existing) == n_train:
+                print(f"Replicate {i}/{replicates}: already exists ({len(existing)} records)")
+                continue
+            print(
+                f"Replicate {i}/{replicates}: incomplete ({len(existing)}/{n_train} records), "
+                f"regenerating..."
+            )
+            output_path.unlink()
+
+        seed = seed_base + i - 1
+        print(
+            f"Replicate {i}/{replicates}: sampling {n_train} records "
+            f"(seed={seed}, {num_workers} workers)..."
+        )
+
+        records = sample_parallel(
+            model_path,
+            n=n_train,
+            num_workers=num_workers,
+            batch_size=batch_size,
+            seed=seed,
+            **sample_kwargs,
+        )
+
+        save_jsonl(records, output_path)
+        print(f"Replicate {i}/{replicates}: saved {len(records)} records to {output_path}")
+
+    return output_paths
