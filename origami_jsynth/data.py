@@ -52,7 +52,7 @@ def _split_records(
 
 def prepare_dataset(
     dataset: str,
-    output_dir: Path,
+    data_dir: Path,
     *,
     dcr: bool = False,
     seed: int = 42,
@@ -61,7 +61,7 @@ def prepare_dataset(
 
     Args:
         dataset: Dataset name from registry.
-        output_dir: Base output directory (e.g., ./results).
+        data_dir: Directory where train.jsonl and test.jsonl will be written.
         dcr: If True, use 50/50 split for DCR privacy evaluation.
         seed: Random seed for splitting.
 
@@ -69,8 +69,6 @@ def prepare_dataset(
         Path to the data directory containing train.jsonl and test.jsonl.
     """
     info = get_dataset(dataset)
-    sub = "dcr" if dcr else ""
-    data_dir = output_dir / dataset / sub / "data" if sub else output_dir / dataset / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
 
     train_path = data_dir / "train.jsonl"

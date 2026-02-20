@@ -15,6 +15,9 @@ dependencies = [
     "pyyaml>=6.0",
 ]
 
+[project.optional-dependencies]
+baselines = ["sdv>=1.0", "be-great>=0.0.5", "realtabformer>=0.1", "transformers>=4.46,<5"]
+
 [project.scripts]
 origami-jsynth = "origami_jsynth.cli:main"
 

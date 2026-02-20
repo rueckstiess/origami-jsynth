@@ -6,25 +6,35 @@ import argparse
 import sys
 from pathlib import Path
 
+from .baselines import MODEL_NAMES
 from .registry import DATASET_NAMES
 
 
 def _resolve_paths(args: argparse.Namespace) -> dict[str, Path]:
-    """Compute standard paths from CLI arguments."""
-    base = Path(args.output_dir) / args.dataset
-    if args.dcr:
-        base = base / "dcr"
+    """Compute standard paths from CLI arguments.
+
+    Layout: results/{dataset}/data/ (shared) + results/{dataset}/{model}/...
+    In DCR mode: results/{dataset}_dcr/data/ + results/{dataset}_dcr/{model}/...
+    """
+    dataset_name = f"{args.dataset}_dcr" if args.dcr else args.dataset
+    dataset_dir = Path(args.output_dir) / dataset_name
+    model_dir = dataset_dir / args.model
     return {
-        "data_dir": base / "data",
-        "checkpoint_dir": base / "checkpoints",
-        "samples_dir": base / "samples",
-        "report_dir": base / "report",
+        "data_dir": dataset_dir / "data",
+        "checkpoint_dir": model_dir / "checkpoints",
+        "samples_dir": model_dir / "samples",
+        "report_dir": model_dir / "report",
     }
 
 
 def _config_path(dataset: str) -> Path:
     """Get the config YAML path for a dataset."""
     return Path(__file__).parent.parent / "configs" / f"{dataset}.yaml"
+
+
+def _model_flag(args: argparse.Namespace) -> str:
+    """Return ' --model X' for error messages."""
+    return f" --model {args.model}"
 
 
 def _dcr_flag(args: argparse.Namespace) -> str:
@@ -49,18 +59,22 @@ def _require_data(paths: dict[str, Path], args: argparse.Namespace) -> None:
 def _require_model(paths: dict[str, Path], args: argparse.Namespace) -> None:
     """Check that a trained model exists, exit with helpful message if not."""
     checkpoint_dir = paths["checkpoint_dir"]
-    has_model = (
-        (checkpoint_dir / "final.pt").exists()
-        or (checkpoint_dir / "best.pt").exists()
-        or list(checkpoint_dir.glob("epoch_*.pt"))
-        if checkpoint_dir.exists()
-        else False
-    )
+    if args.model == "origami":
+        has_model = (
+            (checkpoint_dir / "final.pt").exists()
+            or (checkpoint_dir / "best.pt").exists()
+            or list(checkpoint_dir.glob("epoch_*.pt"))
+            if checkpoint_dir.exists()
+            else False
+        )
+    else:
+        has_model = checkpoint_dir.exists() and any(checkpoint_dir.iterdir())
     if not has_model:
         print(
             f"Error: No trained model found in {checkpoint_dir}\n\n"
             f"Run this first:\n"
-            f"  origami-jsynth train --dataset {args.dataset}{_dcr_flag(args)}",
+            f"  origami-jsynth train --dataset {args.dataset}"
+            f"{_model_flag(args)}{_dcr_flag(args)}",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -76,46 +90,83 @@ def _require_samples(paths: dict[str, Path], args: argparse.Namespace) -> None:
         print(
             f"Error: No synthetic_*.jsonl files found in {paths['samples_dir']}\n\n"
             f"Run this first:\n"
-            f"  origami-jsynth sample --dataset {args.dataset}{_dcr_flag(args)}",
+            f"  origami-jsynth sample --dataset {args.dataset}"
+            f"{_model_flag(args)}{_dcr_flag(args)}",
             file=sys.stderr,
         )
         sys.exit(1)
 
 
+def _parse_overrides(overrides: list[str]) -> dict:
+    """Parse key=value overrides into a dict with auto-casting."""
+    kwargs = {}
+    for override in overrides:
+        if "=" not in override:
+            raise ValueError(f"Invalid --param format: {override!r} (expected KEY=VALUE)")
+        key, value = override.split("=", 1)
+        if value.lower() in ("true", "false"):
+            value = value.lower() == "true"
+        else:
+            try:
+                value = int(value)
+            except ValueError:
+                try:
+                    value = float(value)
+                except ValueError:
+                    pass
+        kwargs[key] = value
+    return kwargs
+
+
 def cmd_data(args: argparse.Namespace) -> None:
     from .data import prepare_dataset
 
+    paths = _resolve_paths(args)
     prepare_dataset(
         args.dataset,
-        Path(args.output_dir),
+        paths["data_dir"],
         dcr=args.dcr,
     )
 
 
 def cmd_train(args: argparse.Namespace) -> None:
-    from .train import train_dataset
-
     paths = _resolve_paths(args)
-    config_path = _config_path(args.dataset)
-
-    if not config_path.exists():
-        print(f"Error: Config file not found: {config_path}", file=sys.stderr)
-        sys.exit(1)
-
     _require_data(paths, args)
 
-    train_dataset(
-        args.dataset,
-        data_dir=paths["data_dir"],
-        checkpoint_dir=paths["checkpoint_dir"],
-        config_path=config_path,
-        overrides=args.param,
-    )
+    if args.model == "origami":
+        from .train import train_dataset
+
+        config_path = _config_path(args.dataset)
+        if not config_path.exists():
+            print(f"Error: Config file not found: {config_path}", file=sys.stderr)
+            sys.exit(1)
+
+        train_dataset(
+            args.dataset,
+            data_dir=paths["data_dir"],
+            checkpoint_dir=paths["checkpoint_dir"],
+            config_path=config_path,
+            overrides=args.param,
+        )
+    else:
+        from .baselines import get_synthesizer
+        from .data import load_jsonl
+        from .registry import get_dataset
+
+        info = get_dataset(args.dataset)
+        kwargs = _parse_overrides(args.param)
+        synth = get_synthesizer(args.model, tabular=info.tabular, **kwargs)
+
+        train_records = load_jsonl(paths["data_dir"] / "train.jsonl")
+        print(f"Training {args.model} on {args.dataset} ({len(train_records)} records)")
+        synth.fit(train_records)
+        synth.save(paths["checkpoint_dir"])
+        print(f"Model saved to {paths['checkpoint_dir']}")
 
 
 def cmd_sample(args: argparse.Namespace) -> None:
+    from .data import load_jsonl, save_jsonl
     from .registry import get_dataset
-    from .sample import sample_dataset
 
     paths = _resolve_paths(args)
     info = get_dataset(args.dataset)
@@ -123,15 +174,41 @@ def cmd_sample(args: argparse.Namespace) -> None:
     _require_data(paths, args)
     _require_model(paths, args)
 
-    sample_dataset(
-        args.dataset,
-        checkpoint_dir=paths["checkpoint_dir"],
-        samples_dir=paths["samples_dir"],
-        num_workers=args.num_workers,
-        tabular=info.tabular,
-        data_dir=paths["data_dir"],
-        replicates=args.replicates,
-    )
+    if args.model == "origami":
+        from .sample import sample_dataset
+
+        sample_dataset(
+            args.dataset,
+            checkpoint_dir=paths["checkpoint_dir"],
+            samples_dir=paths["samples_dir"],
+            num_workers=args.num_workers,
+            tabular=info.tabular,
+            data_dir=paths["data_dir"],
+            replicates=args.replicates,
+        )
+    else:
+        from .baselines import get_synthesizer
+
+        paths["samples_dir"].mkdir(parents=True, exist_ok=True)
+        n_train = len(load_jsonl(paths["data_dir"] / "train.jsonl"))
+        synth = type(get_synthesizer(args.model, tabular=info.tabular)).load(
+            paths["checkpoint_dir"], tabular=info.tabular
+        )
+
+        for i in range(1, args.replicates + 1):
+            output_path = paths["samples_dir"] / f"synthetic_{i}.jsonl"
+            if output_path.exists():
+                existing = load_jsonl(output_path)
+                if len(existing) == n_train:
+                    print(
+                        f"Replicate {i}/{args.replicates}: "
+                        f"already exists ({len(existing)} records)"
+                    )
+                    continue
+            print(f"Replicate {i}/{args.replicates}: sampling {n_train} records...")
+            records = synth.sample(n_train)
+            save_jsonl(records, output_path)
+            print(f"Replicate {i}/{args.replicates}: saved {len(records)} records to {output_path}")
 
 
 def cmd_eval(args: argparse.Namespace) -> None:
@@ -171,6 +248,10 @@ def main() -> None:
         p.add_argument("--dataset", required=True, choices=DATASET_NAMES, help="Dataset name")
         p.add_argument("--output-dir", default="./results", help="Base output directory")
         p.add_argument(
+            "--model", default="origami", choices=MODEL_NAMES,
+            help="Synthesizer model (default: origami)",
+        )
+        p.add_argument(
             "--dcr", action="store_true", help="DCR mode: 50/50 split, privacy eval only"
         )
 
@@ -180,14 +261,14 @@ def main() -> None:
     p_data.set_defaults(func=cmd_data)
 
     # train
-    p_train = subparsers.add_parser("train", help="Train Origami model")
+    p_train = subparsers.add_parser("train", help="Train a synthesizer model")
     add_common_args(p_train)
     p_train.add_argument(
         "--param",
         action="append",
         default=[],
         metavar="KEY=VALUE",
-        help="Override config value (e.g. --param training.num_epochs=2)",
+        help="Override config/model parameter (e.g. --param epochs=300)",
     )
     p_train.set_defaults(func=cmd_train)
 
@@ -219,7 +300,7 @@ def main() -> None:
         action="append",
         default=[],
         metavar="KEY=VALUE",
-        help="Override config value (e.g. --param training.num_epochs=2)",
+        help="Override config/model parameter (e.g. --param epochs=300)",
     )
     p_all.set_defaults(func=cmd_all)
 
@@ -230,7 +311,9 @@ def main() -> None:
         print("\nInterrupted.", file=sys.stderr)
         sys.exit(130)
     except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+        import traceback
+
+        traceback.print_exc()
         sys.exit(1)
 
 

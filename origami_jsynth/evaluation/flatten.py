@@ -259,15 +259,19 @@ def _is_nan(value: Any) -> bool:
 
 
 def _convert_numeric_dicts_to_lists(obj: Any) -> Any:
-    """Convert dicts with all-numeric keys to lists, recursively."""
+    """Convert dicts with all-numeric keys to lists, recursively.
+
+    Values are packed contiguously in sorted key order — gaps from skipped
+    NaN entries do not produce None holes in the resulting list.
+    """
     if isinstance(obj, dict):
         # Check if all keys are numeric strings
         if obj and all(k.isdigit() for k in obj):
-            # Convert to list
-            max_idx = max(int(k) for k in obj)
-            result = [None] * (max_idx + 1)
-            for k, v in obj.items():
-                result[int(k)] = _convert_numeric_dicts_to_lists(v)
+            # Convert to list, packing values contiguously in key order
+            result = [
+                _convert_numeric_dicts_to_lists(v)
+                for _, v in sorted(obj.items(), key=lambda kv: int(kv[0]))
+            ]
             return result
         else:
             return {k: _convert_numeric_dicts_to_lists(v) for k, v in obj.items()}
