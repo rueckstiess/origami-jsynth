@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import random
 from pathlib import Path
@@ -122,6 +123,30 @@ def _prepare_yelp(
 
     print("Loading Yelp data from manual download...")
     records = load_jsonl(raw_path)
+
+    # Strip fields that are unique identifiers / PII and not useful for synthesis.
+    drop_fields = {"name", "business_id", "address"}
+    records = [{k: v for k, v in r.items() if k not in drop_fields} for r in records]
+
+    # Parse comma-separated categories string into a list of strings.
+    for r in records:
+        if isinstance(r.get("categories"), str):
+            r["categories"] = [c.strip() for c in r["categories"].split(",")]
+
+    # The raw Yelp dump stores attribute values as Python repr strings
+    # (e.g. "True", "u'casual'", "{'garage': False, ...}").
+    # Parse them into proper JSON types.
+    for r in records:
+        attrs = r.get("attributes")
+        if not isinstance(attrs, dict):
+            continue
+        for k, v in attrs.items():
+            if isinstance(v, str):
+                try:
+                    attrs[k] = ast.literal_eval(v)
+                except (ValueError, SyntaxError):
+                    pass  # keep as string if not a valid Python literal
+
     ratio = 0.5 if dcr else info.split_ratio
     train_records, test_records = _split_records(records, ratio, seed=seed)
     print(f"Split: {len(train_records)} train / {len(test_records)} test")
