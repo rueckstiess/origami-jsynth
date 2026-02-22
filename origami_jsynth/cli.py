@@ -119,13 +119,40 @@ def _parse_overrides(overrides: list[str]) -> dict:
 
 
 def cmd_data(args: argparse.Namespace) -> None:
-    from .data import prepare_dataset
+    from .baselines._preprocessing import records_to_dataframe
+    from .data import load_jsonl, prepare_dataset
+    from .registry import get_dataset
 
     paths = _resolve_paths(args)
     prepare_dataset(
         args.dataset,
         paths["data_dir"],
         dcr=args.dcr,
+    )
+
+    # Export preprocessed (flattened + type-separated) CSVs for external baselines
+    data_dir = paths["data_dir"]
+    train_csv = data_dir / "train.csv"
+    test_csv = data_dir / "test.csv"
+
+    if train_csv.exists() and test_csv.exists():
+        print(f"Preprocessed CSVs already exist at {data_dir}")
+        return
+
+    info = get_dataset(args.dataset)
+    train_records = load_jsonl(data_dir / "train.jsonl")
+    test_records = load_jsonl(data_dir / "test.jsonl")
+
+    # Process combined records so both splits get an identical column schema
+    n_train = len(train_records)
+    df, _ = records_to_dataframe(train_records + test_records, tabular=info.tabular)
+    train_df = df.iloc[:n_train]
+    test_df = df.iloc[n_train:]
+
+    train_df.to_csv(train_csv, index=False)
+    test_df.to_csv(test_csv, index=False)
+    print(
+        f"Saved preprocessed CSVs ({df.shape[1]} columns) to {data_dir}"
     )
 
 
