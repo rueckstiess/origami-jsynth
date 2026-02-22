@@ -2301,7 +2301,7 @@ requires-dist = [
     { name = "be-great", marker = "extra == 'baselines'", specifier = ">=0.0.5" },
     { name = "huggingface-hub", specifier = ">=0.20" },
     { name = "numba", specifier = ">=0.63" },
-    { name = "origami-ml", specifier = "==2.0.0a10" },
+    { name = "origami-ml", specifier = "==2.0.0a11" },
     { name = "pandas", specifier = ">=2.3,<3" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "realtabformer", marker = "extra == 'baselines'", specifier = ">=0.1" },
@@ -2318,7 +2318,7 @@ dev = [{ name = "ruff", specifier = ">=0.9" }]
 
 [[package]]
 name = "origami-ml"
-version = "2.0.0a10"
+version = "2.0.0a11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -2333,9 +2333,9 @@ dependencies = [
     { name = "torch" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/db/0f/43adae97bc56693f32a43d781980636e1d6ee1524ca66a9def4b73492197/origami_ml-2.0.0a10.tar.gz", hash = "sha256:3979f199a7a9f3ef3e666c0d1277006e7f8e0837743ec9963d0239238cb94168", size = 3358242 }
+sdist = { url = "https://files.pythonhosted.org/packages/bd/ff/d7afedbd61f30907db58538c90cf392166944720941fb477b709b5bc4bcf/origami_ml-2.0.0a11.tar.gz", hash = "sha256:690db566d0565fe0e4aca671ada96af3e47a7cd384f5adcc1aaddee6f159115c", size = 3358395 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3a/0c/8c60982f52f966dca4fab3768ad64830cafd16eb12f5c4321c7cf00f459c/origami_ml-2.0.0a10-py3-none-any.whl", hash = "sha256:5624fcad148773c90eca369ec9be85d642dbe57dbaaa9a7113dab0650d55a7a2", size = 152057 },
+    { url = "https://files.pythonhosted.org/packages/4b/4e/c8a3ab1d78657a77d4f495fcf79f468254417895c1adcae3050164204f5e/origami_ml-2.0.0a11-py3-none-any.whl", hash = "sha256:e473e41bc98d24fa5b5fe2e9129c40b3bfe2c7396187a5152709b740188db3ad", size = 152228 },
 ]
 
 [[package]]
