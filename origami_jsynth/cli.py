@@ -186,7 +186,7 @@ def cmd_train(args: argparse.Namespace) -> None:
 
         train_records = load_jsonl(paths["data_dir"] / "train.jsonl")
         print(f"Training {args.model} on {args.dataset} ({len(train_records)} records)")
-        synth.fit(train_records)
+        synth.fit(train_records, checkpoint_dir=paths["checkpoint_dir"])
         synth.save(paths["checkpoint_dir"])
         print(f"Model saved to {paths['checkpoint_dir']}")
 

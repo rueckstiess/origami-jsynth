@@ -11,6 +11,7 @@ _REGISTRY: dict[str, tuple[str, str]] = {
     "tvae": (".tvae", "TVAEAdapter"),
     "great": (".great", "GReaTAdapter"),
     "realtabformer": (".realtabformer", "REaLTabFormerAdapter"),
+    "mostlyai": (".mostlyai", "MostlyAIAdapter"),
 }
 
 BASELINE_NAMES = list(_REGISTRY.keys())

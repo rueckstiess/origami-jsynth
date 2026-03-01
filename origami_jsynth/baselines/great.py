@@ -33,7 +33,7 @@ class GReaTAdapter:
         self._model: Any = None
         self._state: PreprocessingState | None = None
 
-    def fit(self, records: list[dict[str, Any]]) -> None:
+    def fit(self, records: list[dict[str, Any]], **kwargs: Any) -> None:
         try:
             from be_great import GReaT
         except ImportError:

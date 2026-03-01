@@ -3,7 +3,7 @@ data:
   infer_schema: true
   max_vocab_size: 0
   n_bins: 100
-  numeric_mode: disabled
+  numeric_mode: scale
 model:
   backbone: transformer
   continuous_loss_weight: -1
@@ -19,7 +19,7 @@ training:
   constrain_grammar: true
   constrain_schema: true
   dataloader_num_workers: 0
-  mixed_precision: no
+  mixed_precision: "no"
   eval_epochs: 5
   eval_sample_size: 500
   eval_strategy: epoch

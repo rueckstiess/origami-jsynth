@@ -103,7 +103,7 @@ def compute_privacy(
     test_records: list[dict],
     synthetic_records: list[dict],
     *,
-    n_components: int = 10000,
+    n_components: int = 30000,
     batch_size: int = 100,
     max_synth_samples: int | None = None,
     max_workers: int | None = None,

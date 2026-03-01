@@ -15,6 +15,32 @@ _DEFAULTS = {
     "logging_steps": 100,
 }
 
+# Parameters accepted by REaLTabFormer.fit() (not the constructor).
+# These are extracted from kwargs and forwarded to .fit() separately.
+_FIT_PARAMS = {
+    "resume_from_checkpoint",
+    "device",
+    "num_bootstrap",
+    "frac",
+    "frac_max_data",
+    "qt_max",
+    "qt_max_default",
+    "qt_interval",
+    "qt_interval_unique",
+    "quantile",
+    "n_critic",
+    "n_critic_stop",
+    "gen_rounds",
+    "sensitivity_max_col_nums",
+    "use_ks",
+    "full_sensitivity",
+    "sensitivity_orig_frac_multiple",
+    "orig_samples_rounds",
+    "load_from_best_mean_sensitivity",
+    "target_col",
+    "save_full_every_epoch",
+}
+
 
 def _patch_save(model: Any) -> None:
     """Monkey-patch model.save() to fix upstream serialization bugs.
@@ -61,11 +87,20 @@ class REaLTabFormerAdapter:
 
     def __init__(self, tabular: bool = True, **kwargs: Any) -> None:
         self.tabular = tabular
-        self.kwargs = {**_DEFAULTS, **kwargs}
+        merged = {**_DEFAULTS, **kwargs}
+        self.fit_kwargs: dict[str, Any] = {}
+        for key in list(merged):
+            if key in _FIT_PARAMS:
+                self.fit_kwargs[key] = merged.pop(key)
+        self.kwargs = merged
         self._model: Any = None
         self._state: PreprocessingState | None = None
 
-    def fit(self, records: list[dict[str, Any]]) -> None:
+    def fit(
+        self,
+        records: list[dict[str, Any]],
+        checkpoint_dir: Path | None = None,
+    ) -> None:
         try:
             from realtabformer import REaLTabFormer
         except ImportError:
@@ -75,7 +110,21 @@ class REaLTabFormerAdapter:
             ) from None
 
         df, self._state = records_to_dataframe(records, self.tabular)
-        self._model = REaLTabFormer(**self.kwargs)
+
+        # Redirect RTF's internal working directories into the checkpoint
+        # directory so they don't pollute the working directory.
+        kwargs = dict(self.kwargs)
+        if checkpoint_dir is not None:
+            checkpoint_dir = Path(checkpoint_dir)
+            checkpoint_dir.mkdir(parents=True, exist_ok=True)
+            kwargs.setdefault("checkpoints_dir", str(checkpoint_dir / "rtf_checkpoints"))
+            kwargs.setdefault("samples_save_dir", str(checkpoint_dir / "rtf_samples"))
+            kwargs.setdefault("full_save_dir", str(checkpoint_dir / "rtf_full_save"))
+            # Save preprocessing state early so checkpoints are usable
+            # even if training is interrupted.
+            self._state.save(checkpoint_dir / "preprocess_state.pkl")
+
+        self._model = REaLTabFormer(**kwargs)
         # Upstream bug: fit() sets experiment_id *after* _train_with_sensitivity()
         # returns, but that method calls self.save() internally which asserts
         # experiment_id is not None. Pre-set it here.
@@ -84,7 +133,8 @@ class REaLTabFormerAdapter:
         _patch_save(self._model)
         # gen_kwargs defaults to None upstream, causing **None TypeError during
         # early-stopping sampling. Pass empty dict to work around the bug.
-        self._model.fit(df, gen_kwargs={})
+        fit_kwargs = {**self.fit_kwargs, "gen_kwargs": {}}
+        self._model.fit(df, **fit_kwargs)
 
     def sample(self, n: int) -> list[dict[str, Any]]:
         assert self._model is not None and self._state is not None

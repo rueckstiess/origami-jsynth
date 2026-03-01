@@ -71,8 +71,8 @@ DATASETS: dict[str, DatasetInfo] = {
     ),
     "yelp": DatasetInfo(
         name="yelp",
-        target_column="stars",
-        task_type="multiclass",
+        target_column="is_open",
+        task_type="binclass",
         tabular=False,
         has_canonical_split=False,
         hf_path=None,  # manual download required

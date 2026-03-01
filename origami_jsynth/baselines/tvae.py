@@ -27,7 +27,7 @@ class TVAEAdapter:
         self._model: Any = None
         self._state: PreprocessingState | None = None
 
-    def fit(self, records: list[dict[str, Any]]) -> None:
+    def fit(self, records: list[dict[str, Any]], **kwargs: Any) -> None:
         try:
             from sdv.single_table import TVAESynthesizer
         except ImportError:

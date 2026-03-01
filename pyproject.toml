@@ -13,10 +13,12 @@ dependencies = [
     "numba>=0.63",
     "huggingface-hub>=0.20",
     "pyyaml>=6.0",
+    "nbformat>=4.2.0",
+    "itables>=2.7.0",
 ]
 
 [project.optional-dependencies]
-baselines = ["sdv>=1.0", "be-great>=0.0.5", "realtabformer>=0.1", "transformers>=4.46,<5"]
+baselines = ["sdv>=1.0", "be-great>=0.0.5", "realtabformer>=0.1", "transformers>=4.46,<5", "mostlyai-engine"]
 
 [project.scripts]
 origami-jsynth = "origami_jsynth.cli:main"
