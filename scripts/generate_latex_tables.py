@@ -336,11 +336,17 @@ def load_results():
     return data
 
 
-def fmt_val(mean, std, precision=3, is_count=False):
-    """Format a metric value as mean +/- std."""
+def fmt_val(mean, std, precision=3, is_count=False, bold=False):
+    """Format a metric value with smaller gray stddev, bold only on mean."""
     if is_count:
-        return f"{mean:.1f} \\pm {std:.1f}"
-    return f"{mean:.{precision}f} \\pm {std:.{precision}f}"
+        mean_str = f"{mean:.1f}"
+        std_str = f"{std:.1f}"
+    else:
+        mean_str = f"{mean:.{precision}f}"
+        std_str = f"{std:.{precision}f}"
+    if bold:
+        return f"$\\underline{{\\mathbf{{{mean_str}}}}}{{\\color{{gray}}\\scriptstyle\\,\\pm\\,{std_str}}}$"
+    return f"${mean_str}{{\\color{{gray}}\\scriptstyle\\,\\pm\\,{std_str}}}$"
 
 
 def find_best(data, table_cfg, metric_key):
@@ -445,14 +451,12 @@ def generate_table(_table_name, table_cfg, data):
                     mean_val = model_data[metric_key]["mean"]
                     std_val = model_data[metric_key]["std"]
                     is_count = metric_key.startswith("privacy_exact_matches")
-                    cell = fmt_val(mean_val, std_val, is_count=is_count)
                     is_best = is_primary and best_per_metric[metric_key].get(
                         (ds, model), False
                     )
-                    if is_best:
-                        row_parts.append(f"{{\\boldmath${cell}$}}")
-                    else:
-                        row_parts.append(f"${cell}$")
+                    row_parts.append(
+                        fmt_val(mean_val, std_val, is_count=is_count, bold=is_best)
+                    )
 
             lines.append("    " + " & ".join(row_parts) + " \\\\")
 
@@ -535,14 +539,12 @@ def generate_table_transposed(_table_name, table_cfg, data):
                     mean_val = model_data[metric_key]["mean"]
                     std_val = model_data[metric_key]["std"]
                     is_count = metric_key.startswith("privacy_exact_matches")
-                    cell = fmt_val(mean_val, std_val, is_count=is_count)
                     is_best = is_primary and best_per_metric[metric_key].get(
                         (ds, model), False
                     )
-                    if is_best:
-                        row_parts.append(f"{{\\boldmath${cell}$}}")
-                    else:
-                        row_parts.append(f"${cell}$")
+                    row_parts.append(
+                        fmt_val(mean_val, std_val, is_count=is_count, bold=is_best)
+                    )
 
             lines.append("    " + " & ".join(row_parts) + " \\\\")
 
@@ -560,7 +562,7 @@ def main():
     data = load_results()
 
     print("% Auto-generated results tables (models as rows, datasets as columns)")
-    print("% Requires: \\usepackage{booktabs, multirow}")
+    print("% Requires: \\usepackage{booktabs, multirow, xcolor}")
     print()
 
     for table_name, table_cfg in TABLES.items():

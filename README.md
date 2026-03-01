@@ -1,6 +1,7 @@
 # origami-jsynth
 
-Minimal reproduction package for Origami tabular/JSON synthesis experiments.
+Reproduction package for Origami tabular/JSON synthesis experiments and baselines for the publication
+"Autoregressive Synthesis of Sparse and Semi-Structured Mixed-Type Data".
 
 ## Setup
 
@@ -10,12 +11,18 @@ Requires Python 3.11+. MPS (Apple Silicon) or CUDA-capable GPU recommended for t
 pip install -e .
 ```
 
+To run baseline synthesizers (CTGAN, TVAE, GReaT, REaLTabFormer, Mostly AI):
+
+```bash
+pip install -e ".[baselines]"
+```
+
 ## Quick Start
 
 Run the full pipeline for a dataset:
 
 ```bash
-origami-jsynth all --dataset adult  # diabetes, electric_vehicles, ddxplus, mtg, yelp
+origami-jsynth all --dataset adult  # diabetes, electric_vehicles, ddxplus, yelp
 ```
 
 Or run each step individually:
@@ -34,10 +41,31 @@ Results are saved to `./results/<dataset>/`.
 To verify the full pipeline works end-to-end (splitting, training, sampling, evaluation):
 
 ```bash
-origami-jsynth all --dataset adult --replicates 2 --param training.num_epochs=5
+origami-jsynth all --dataset adult --model origami --replicates 2 --param training.num_epochs=5
 ```
 
 This completes in approximately 5 minutes with an MPS or CUDA device. The evaluation results from this quick run are not representative of the final results reported in the paper, which require significantly longer training (~500 epochs on the adult dataset).
+
+## Baselines
+
+The `--model` flag selects which synthesizer to run. The default is `origami`.
+
+| Model | Package | Description |
+|-------|---------|-------------|
+| `origami` | `origami-ml` | Origami (ours) |
+| `ctgan` | `sdv` | CTGAN |
+| `tvae` | `sdv` | TVAE |
+| `great` | `be-great` | GReaT (distilgpt2) |
+| `realtabformer` | `realtabformer` | REaLTabFormer |
+| `mostlyai` | `mostlyai-engine` | Mostly AI (TabularARGN) |
+
+```bash
+origami-jsynth all --dataset adult --model ctgan
+```
+
+All models share the same `data`, `sample`, and `eval` pipeline. Each model's artifacts (checkpoints, samples, reports) are stored under `results/<dataset>/<model>/`.
+
+TabbyDPF and TabDiff are not included in this package because they do not offer a Python SDK and instead operate on `.csv` files directly. We ran these baselines in their respective repositories using the flattened `.csv` splits produced by the `data` command.
 
 ## Replicates
 
@@ -48,7 +76,7 @@ origami-jsynth sample --dataset adult --replicates 10
 origami-jsynth eval --dataset adult
 ```
 
-The default in this package is `--replicates 1` for a quick run, but the paper results use `--replicates 10` for all datasets.
+The default in this package is `--replicates 1` for a quick run, but the paper results use `--replicates 10` for all datasets, except DDXPlus for DCR, which uses `--replicates 3` due to the much longer privacy metric evaluation time.
 
 This produces `synthetic_1.jsonl` through `synthetic_10.jsonl` in the samples directory. The `eval` command automatically discovers all replicate files, evaluates each independently, and reports aggregate statistics (mean and standard deviation). Results are saved as individual `results_{i}.json` files plus an `agg_results.json` with the aggregate summary.
 
@@ -62,7 +90,7 @@ To evaluate privacy using Distance to Closest Record (DCR), use the `--dcr` flag
 origami-jsynth all --dataset adult --dcr
 ```
 
-DCR results are saved to `./results/<dataset>/dcr/`.
+DCR results are saved to `./results/<dataset>_dcr/`.
 
 ## Datasets
 
@@ -72,7 +100,6 @@ DCR results are saved to `./results/<dataset>/dcr/`.
 | diabetes | Tabular | Binary classification | ~81K | HuggingFace |
 | electric_vehicles | Tabular | Multiclass | ~210K | HuggingFace |
 | ddxplus | Semi-structured | Multiclass | ~1.16M | HuggingFace |
-| mtg | Semi-structured | Multiclass | ~74K | HuggingFace |
 | yelp | Semi-structured | Multiclass | ~150K | Manual download |
 
 ### Yelp Dataset
@@ -97,7 +124,8 @@ Commands:
   all      Run the full pipeline (data -> train -> sample -> eval)
 
 Options:
-  --dataset       Dataset name (adult, diabetes, electric_vehicles, ddxplus, mtg, yelp)
+  --dataset       Dataset name (adult, diabetes, electric_vehicles, ddxplus, yelp)
+  --model         Synthesizer to use (default: origami; see Baselines section)
   --output-dir    Base output directory (default: ./results)
   --dcr           DCR mode: 50/50 split, privacy evaluation only
   --num-workers   Number of parallel sampling workers (default: 4, sample/all only)
@@ -108,17 +136,21 @@ Options:
 
 ```
 results/
-└── adult/
-    ├── data/
-    │   ├── train.jsonl
-    │   └── test.jsonl
-    ├── checkpoints/
-    │   └── final.pt
-    ├── samples/
-    │   ├── synthetic_1.jsonl
-    │   └── ...                  # synthetic_{N}.jsonl when using --replicates N
-    └── report/
-        ├── results_1.json
-        ├── ...                  # results_{N}.json when using --replicates N
-        └── agg_results.json
+├── adult/                       # regular run
+│   ├── data/
+│   │   ├── train.jsonl
+│   │   ├── test.jsonl
+│   │   ├── train.csv            # flattened tabular view
+│   │   └── test.csv
+│   └── origami/                 # one subdirectory per --model
+│       ├── checkpoints/
+│       ├── samples/
+│       │   ├── synthetic_1.jsonl
+│       │   └── ...              # synthetic_{N}.jsonl when using --replicates N
+│       └── report/
+│           ├── results_1.json
+│           ├── ...              # results_{N}.json when using --replicates N
+│           └── agg_results.json
+└── adult_dcr/                   # DCR privacy run (--dcr flag)
+    └── ...                      # same layout as above
 ```
