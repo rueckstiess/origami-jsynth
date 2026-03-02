@@ -82,7 +82,7 @@ origami-jsynth all --dataset adult --model ctgan
 
 All models share the same `data`, `sample`, and `eval` pipeline. Each model's artifacts (checkpoints, samples, reports) are stored under `results/<dataset>/<model>/`.
 
-Tabby and TabDiff are not included in this package because they do not offer a Python SDK and instead operate on `.csv` files directly. We ran these baselines in their respective repositories using the flattened `.csv` splits produced by the `data` command.
+[Tabby](https://github.com/soCromp/tabby) and [TabDiff](https://github.com/MinkaiXu/TabDiff) are not included in this package because they do not offer a Python SDK and instead operate with Python scripts on `.csv` files directly. We ran these baselines in their respective repositories using the flattened `.csv` splits produced by the `data` command.
 
 ## Replicates
 
