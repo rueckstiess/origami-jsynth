@@ -58,10 +58,10 @@ Results are saved to `./results/<dataset>/<model>/`.
 To verify the full pipeline works end-to-end (splitting, training, sampling, evaluation):
 
 ```bash
-origami-jsynth all --dataset adult --model origami --replicates 2 --param training.num_epochs=5
+origami-jsynth all --dataset adult --model origami -R 2 --param training.num_epochs=5
 ```
 
-This completes in approximately 5 minutes with an MPS or CUDA device. The evaluation results from this quick run are not representative of the final results reported in the paper, which require significantly longer training (~500 epochs on the adult dataset).
+This completes in approximately 5 minutes with an MPS or CUDA device. The evaluation results from this quick run are not representative of the final results reported in the paper, which require significantly longer training (~400 epochs on the adult dataset).
 
 ## Baselines
 
@@ -107,7 +107,7 @@ To evaluate privacy using Distance to Closest Record (DCR), use the `--dcr` flag
 origami-jsynth all --dataset adult --dcr
 ```
 
-DCR results are saved to `./results/<dataset>_dcr/`.
+DCR results are saved to `./results/<dataset>_dcr/<model>/`.
 
 ## Datasets
 
