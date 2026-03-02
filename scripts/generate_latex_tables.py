@@ -58,8 +58,8 @@ METRIC_KEYS = [
     "fidelity_shapes",
     "fidelity_trends",
     "utility",
-    "utility_trtr_roc_auc",
-    "utility_tstr_roc_auc",
+    "utility_trtr_f1_weighted",
+    "utility_tstr_f1_weighted",
     "detection",
     "detection_roc_auc",
     "privacy",
@@ -87,7 +87,7 @@ TABLES = {
         "label": "tab:utility",
         "source": "base",
         "metrics": [
-            ("utility_f1_ratio", "Overall score"),
+            ("utility", "Overall score"),
             ("utility_trtr_f1_weighted", "TRTR $F_1$"),
             ("utility_tstr_f1_weighted", "TSTR $F_1$"),
         ],
@@ -184,14 +184,6 @@ def load_yanex_results():
 
     reader = csv.DictReader(io.StringIO(result.stdout))
 
-    # F1 metric keys extracted from detail files
-    f1_detail_keys = [
-        "utility_trtr_f1_weighted",
-        "utility_tstr_f1_weighted",
-        "utility_f1_ratio",
-    ]
-    all_keys = METRIC_KEYS + f1_detail_keys
-
     # Collect raw values grouped by (dataset, model, source)
     groups = {}  # (dataset, model, source) -> {metric_key: [values]}
     seen_ids = set()
@@ -212,30 +204,13 @@ def load_yanex_results():
         key = (dataset, model, source)
 
         if key not in groups:
-            groups[key] = {m: [] for m in all_keys}
+            groups[key] = {m: [] for m in METRIC_KEYS}
 
         for metric_key in METRIC_KEYS:
             csv_col = f"metric_{metric_key}"
             val = row.get(csv_col, "-")
             if val not in ("-", "", None):
                 groups[key][metric_key].append(float(val))
-
-        # Extract F1 from evaluation_details.json artifact
-        details_path = (
-            YANEX_EXPERIMENTS_DIR / exp_id / "artifacts" / "evaluation_details.json"
-        )
-        if details_path.exists():
-            with open(details_path) as f:
-                details = json.load(f)
-            utility = details.get("utility", {})
-            trtr_f1 = utility.get("trtr_metrics", {}).get("f1_weighted")
-            tstr_f1 = utility.get("tstr_metrics", {}).get("f1_weighted")
-            if trtr_f1 is not None:
-                groups[key]["utility_trtr_f1_weighted"].append(trtr_f1)
-            if tstr_f1 is not None:
-                groups[key]["utility_tstr_f1_weighted"].append(tstr_f1)
-            if trtr_f1 and tstr_f1:
-                groups[key]["utility_f1_ratio"].append(tstr_f1 / trtr_f1)
 
     # Aggregate into mean/std
     data = {}
@@ -270,40 +245,6 @@ def load_jsynth_results():
             if base_path.exists():
                 with open(base_path) as f:
                     data[dataset]["base"][model] = json.load(f)["metrics"]
-
-                # Extract F1 from individual result files
-                f1_trtr_vals = []
-                f1_tstr_vals = []
-                f1_ratio_vals = []
-                for i in range(1, 11):
-                    rpath = (
-                        RESULTS_DIR / dataset / model / "report" / f"results_{i}.json"
-                    )
-                    if rpath.exists():
-                        with open(rpath) as f:
-                            details = json.load(f).get("details", {})
-                        utility = details.get("utility", {})
-                        trtr_f1 = utility.get("trtr_metrics", {}).get("f1_weighted")
-                        tstr_f1 = utility.get("tstr_metrics", {}).get("f1_weighted")
-                        if trtr_f1 is not None:
-                            f1_trtr_vals.append(trtr_f1)
-                        if tstr_f1 is not None:
-                            f1_tstr_vals.append(tstr_f1)
-                        if trtr_f1 and tstr_f1:
-                            f1_ratio_vals.append(tstr_f1 / trtr_f1)
-
-                model_data = data[dataset]["base"][model]
-                for key, vals in [
-                    ("utility_trtr_f1_weighted", f1_trtr_vals),
-                    ("utility_tstr_f1_weighted", f1_tstr_vals),
-                    ("utility_f1_ratio", f1_ratio_vals),
-                ]:
-                    if vals:
-                        model_data[key] = {
-                            "mean": mean(vals),
-                            "std": stdev(vals) if len(vals) > 1 else 0.0,
-                            "values": vals,
-                        }
 
             # DCR/privacy metrics
             dcr_path = (

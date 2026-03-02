@@ -1,17 +1,34 @@
-# origami-jsynth
+# Autoregresive Synthesis of Sparse and Semi-Structured Mixed-Type Data
 
 Reproduction package for Origami tabular/JSON synthesis experiments and baselines for the publication
 "Autoregressive Synthesis of Sparse and Semi-Structured Mixed-Type Data".
+
+
+> The Origami model architecture is published as a standalone package `origami-ml` for flexible use in various contexts.
+> If you want to train an Origami model on your own datasets or for use cases beyond synthetic data generation, we recommend 
+> you use the [Origami repository](https://github.com/rueckstiess/origami/) directly.
+
 
 ## Setup
 
 Requires Python 3.11+. MPS (Apple Silicon) or CUDA-capable GPU recommended for training, but CPU-only is possible for small datasets.
 
+### Optional: Create a virtual environment
+
+It's recommended to create a virtual environment to manage dependencies. You can use the built-in `venv` module:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+### Install the package
+
 ```bash
 pip install -e .
 ```
 
-To run baseline synthesizers (CTGAN, TVAE, GReaT, REaLTabFormer, Mostly AI):
+To run baseline synthesizers (CTGAN, TVAE, GReaT, REaLTabFormer, Mostly AI), instead install with the `baselines` extra:
 
 ```bash
 pip install -e ".[baselines]"
@@ -22,19 +39,19 @@ pip install -e ".[baselines]"
 Run the full pipeline for a dataset:
 
 ```bash
-origami-jsynth all --dataset adult  # diabetes, electric_vehicles, ddxplus, yelp
+origami-jsynth all --dataset adult --model origami
 ```
 
 Or run each step individually:
 
 ```text
-origami-jsynth data --dataset adult
-origami-jsynth train --dataset adult
-origami-jsynth sample --dataset adult
-origami-jsynth eval --dataset adult
+origami-jsynth data --dataset adult --model origami
+origami-jsynth train --dataset adult --model origami
+origami-jsynth sample --dataset adult --model origami
+origami-jsynth eval --dataset adult --model origami
 ```
 
-Results are saved to `./results/<dataset>/`.
+Results are saved to `./results/<dataset>/<model>/`.
 
 ## Quick Sanity Check
 
@@ -65,7 +82,7 @@ origami-jsynth all --dataset adult --model ctgan
 
 All models share the same `data`, `sample`, and `eval` pipeline. Each model's artifacts (checkpoints, samples, reports) are stored under `results/<dataset>/<model>/`.
 
-TabbyDPF and TabDiff are not included in this package because they do not offer a Python SDK and instead operate on `.csv` files directly. We ran these baselines in their respective repositories using the flattened `.csv` splits produced by the `data` command.
+Tabby and TabDiff are not included in this package because they do not offer a Python SDK and instead operate on `.csv` files directly. We ran these baselines in their respective repositories using the flattened `.csv` splits produced by the `data` command.
 
 ## Replicates
 
@@ -108,7 +125,7 @@ The Yelp dataset cannot be redistributed due to the [Yelp Dataset Terms of Use](
 
 1. Go to https://www.yelp.com/dataset and accept the terms
 2. Download the dataset (you need `yelp_academic_dataset_business.json`)
-3. Place it at `./results/yelp/yelp_academic_dataset_business.json`
+3. Place it at `./results/yelp_academic_dataset_business.json`
 4. Run `origami-jsynth data --dataset yelp`
 
 ## CLI Reference

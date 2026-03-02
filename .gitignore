@@ -5,7 +5,7 @@
 .claude/
 
 # Results (generated data, checkpoints, samples, reports)
-results/
+results*/
 
 # Python
 __pycache__/

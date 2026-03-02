@@ -134,7 +134,7 @@ def evaluate_synthetic_data(
             task_type=task_type,
             **(utility_kwargs or {}),
         )
-        primary_metric = "roc_auc" if utility_result.task_type == "classification" else "r2"
+        primary_metric = "f1_weighted" if utility_result.task_type == "classification" else "r2"
         trtr_primary = utility_result.trtr_metrics[primary_metric]
         tstr_primary = utility_result.tstr_metrics[primary_metric]
         metrics.update(

@@ -212,7 +212,7 @@ def _run_tstr(
         trtr_metrics = _evaluate_classification(X_train, y_train, X_test, y_test, **model_params)
         tstr_metrics = _evaluate_classification(X_synth, y_synth, X_test, y_test, **model_params)
 
-        utility_score = min(tstr_metrics["roc_auc"] / max(trtr_metrics["roc_auc"], 1e-10), 1.0)
+        utility_score = min(tstr_metrics["f1_weighted"] / max(trtr_metrics["f1_weighted"], 1e-10), 1.0)
     else:
         trtr_metrics = _evaluate_regression(X_train, y_train, X_test, y_test, **model_params)
         tstr_metrics = _evaluate_regression(X_synth, y_synth, X_test, y_test, **model_params)

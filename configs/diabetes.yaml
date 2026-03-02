@@ -5,7 +5,7 @@ data:
   n_bins: 100
   numeric_mode: scale
 model:
-  backbone: transformer
+  backbone: cached_transformer
   continuous_loss_weight: -1
   d_ff: 512
   d_model: 64
