@@ -135,7 +135,7 @@ origami-jsynth <command> --dataset <name> [--output-dir ./results] [--dcr]
 
 Commands:
   data     Download and prepare dataset splits
-  train    Train an Origami model
+  train    Train a model (Origami or baseline)
   sample   Generate synthetic data from a trained model
   eval     Evaluate synthetic data quality
   all      Run the full pipeline (data -> train -> sample -> eval)
@@ -147,6 +147,7 @@ Options:
   --dcr           DCR mode: 50/50 split, privacy evaluation only
   --num-workers   Number of parallel sampling workers (default: 4, sample/all only)
   -R, --replicates  Number of independent sampling rounds (default: 1, sample/all only)
+  --param         Override config parameters (e.g. --param training.num_epochs=5)
 ```
 
 ## Output Structure
