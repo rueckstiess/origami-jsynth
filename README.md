@@ -1,4 +1,4 @@
-# Autoregresive Synthesis of Sparse and Semi-Structured Mixed-Type Data
+# Autoregressive Synthesis of Sparse and Semi-Structured Mixed-Type Data
 
 Reproduction package for Origami tabular/JSON synthesis experiments and baselines for the publication
 "Autoregressive Synthesis of Sparse and Semi-Structured Mixed-Type Data".
