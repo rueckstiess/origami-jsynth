@@ -342,16 +342,20 @@ def merge_types(
 
             if typed_col.endswith(".num"):
                 mask = dtypes == "num"
-                values.loc[mask] = df.loc[mask, typed_col]
+                # If .dtype says "num" but value is NaN (incoherent),
+                # leave as NaN so the field is treated as missing.
+                has_value = mask & df[typed_col].notna()
+                values.loc[has_value] = df.loc[has_value, typed_col]
             elif typed_col.endswith(".cat"):
                 mask = dtypes == "cat"
-                values.loc[mask] = df.loc[mask, typed_col]
+                has_value = mask & df[typed_col].notna()
+                values.loc[has_value] = df.loc[has_value, typed_col]
             elif typed_col.endswith(".date"):
                 mask = dtypes == "date"
+                has_value = mask & df[typed_col].notna()
                 # Convert datetime to ISO format string for JSON serialization
-                date_vals = df.loc[mask, typed_col]
-                iso_strings = date_vals.apply(lambda x: x.isoformat() if pd.notna(x) else np.nan)
-                values.loc[mask] = iso_strings
+                date_vals = df.loc[has_value, typed_col]
+                values.loc[has_value] = date_vals.apply(lambda x: x.isoformat())
             elif typed_col.endswith(".bool"):
                 mask = dtypes == "bool"
                 bool_vals = df.loc[mask, typed_col]
@@ -362,7 +366,8 @@ def merge_types(
                     bool_vals.dtype, pd.StringDtype
                 ):
                     bool_vals = bool_vals.map({"True": True, "False": False}).fillna(bool_vals)
-                values.loc[mask] = bool_vals
+                has_value = mask & df[typed_col].notna()
+                values.loc[has_value] = bool_vals.loc[has_value]
             # Note: .alen is metadata used below, not for direct value reconstruction
 
         # Handle array reconstruction from children

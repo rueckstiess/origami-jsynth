@@ -10,6 +10,15 @@ from .baselines import MODEL_NAMES
 from .registry import DATASET_NAMES
 
 
+def _wandb_available() -> bool:
+    try:
+        import wandb  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
 def _resolve_paths(args: argparse.Namespace) -> dict[str, Path]:
     """Compute standard paths from CLI arguments.
 
@@ -118,6 +127,16 @@ def _parse_overrides(overrides: list[str]) -> dict:
     return kwargs
 
 
+def _sync_context(args: argparse.Namespace) -> RemoteSync:
+    """Build a RemoteSync context manager from CLI args."""
+    from .sync import RemoteSync
+
+    return RemoteSync(
+        local_dir=args.output_dir,
+        remote_url=getattr(args, "remote", None),
+    )
+
+
 def cmd_data(args: argparse.Namespace) -> None:
     from .baselines._preprocessing import records_to_dataframe
     from .data import load_jsonl, prepare_dataset
@@ -160,35 +179,52 @@ def cmd_train(args: argparse.Namespace) -> None:
     paths = _resolve_paths(args)
     _require_data(paths, args)
 
-    if args.model == "origami":
-        from .train import train_dataset
+    max_seconds = args.max_minutes * 60 if getattr(args, "max_minutes", None) else None
+    use_wandb = _wandb_available() and not getattr(args, "no_wandb", False)
 
-        config_path = _config_path(args.dataset)
-        if not config_path.exists():
-            print(f"Error: Config file not found: {config_path}", file=sys.stderr)
-            sys.exit(1)
+    if use_wandb:
+        import os
 
-        train_dataset(
-            args.dataset,
-            data_dir=paths["data_dir"],
-            checkpoint_dir=paths["checkpoint_dir"],
-            config_path=config_path,
-            overrides=args.param,
-        )
-    else:
-        from .baselines import get_synthesizer
-        from .data import load_jsonl
-        from .registry import get_dataset
+        os.environ.setdefault("WANDB_PROJECT", "origami-jsynth")
 
-        info = get_dataset(args.dataset)
-        kwargs = _parse_overrides(args.param)
-        synth = get_synthesizer(args.model, tabular=info.tabular, **kwargs)
+    with _sync_context(args):
+        if args.model == "origami":
+            from .train import train_dataset
 
-        train_records = load_jsonl(paths["data_dir"] / "train.jsonl")
-        print(f"Training {args.model} on {args.dataset} ({len(train_records)} records)")
-        synth.fit(train_records, checkpoint_dir=paths["checkpoint_dir"])
-        synth.save(paths["checkpoint_dir"])
-        print(f"Model saved to {paths['checkpoint_dir']}")
+            config_path = _config_path(args.dataset)
+            if not config_path.exists():
+                print(f"Error: Config file not found: {config_path}", file=sys.stderr)
+                sys.exit(1)
+
+            train_dataset(
+                args.dataset,
+                data_dir=paths["data_dir"],
+                checkpoint_dir=paths["checkpoint_dir"],
+                config_path=config_path,
+                overrides=args.param,
+                max_seconds=max_seconds,
+                wandb=use_wandb,
+            )
+        else:
+            from .baselines import get_synthesizer
+            from .data import load_jsonl
+            from .registry import get_dataset
+
+            info = get_dataset(args.dataset)
+            kwargs = _parse_overrides(args.param)
+            synth = get_synthesizer(args.model, tabular=info.tabular, dataset_info=info, **kwargs)
+
+            train_records = load_jsonl(paths["data_dir"] / "train.jsonl")
+            print(f"Training {args.model} on {args.dataset} ({len(train_records)} records)")
+            synth.fit(
+                train_records,
+                checkpoint_dir=paths["checkpoint_dir"],
+                max_seconds=max_seconds,
+                wandb=use_wandb,
+                dataset=args.dataset,
+            )
+            synth.save(paths["checkpoint_dir"])
+            print(f"Model saved to {paths['checkpoint_dir']}")
 
 
 def cmd_sample(args: argparse.Namespace) -> None:
@@ -201,41 +237,42 @@ def cmd_sample(args: argparse.Namespace) -> None:
     _require_data(paths, args)
     _require_model(paths, args)
 
-    if args.model == "origami":
-        from .sample import sample_dataset
+    with _sync_context(args):
+        if args.model == "origami":
+            from .sample import sample_dataset
 
-        sample_dataset(
-            args.dataset,
-            checkpoint_dir=paths["checkpoint_dir"],
-            samples_dir=paths["samples_dir"],
-            num_workers=args.num_workers,
-            tabular=info.tabular,
-            data_dir=paths["data_dir"],
-            replicates=args.replicates,
-        )
-    else:
-        from .baselines import get_synthesizer
+            sample_dataset(
+                args.dataset,
+                checkpoint_dir=paths["checkpoint_dir"],
+                samples_dir=paths["samples_dir"],
+                num_workers=args.num_workers,
+                tabular=info.tabular,
+                data_dir=paths["data_dir"],
+                replicates=args.replicates,
+            )
+        else:
+            from .baselines import get_synthesizer
 
-        paths["samples_dir"].mkdir(parents=True, exist_ok=True)
-        n_train = len(load_jsonl(paths["data_dir"] / "train.jsonl"))
-        synth = type(get_synthesizer(args.model, tabular=info.tabular)).load(
-            paths["checkpoint_dir"], tabular=info.tabular
-        )
+            paths["samples_dir"].mkdir(parents=True, exist_ok=True)
+            n_train = len(load_jsonl(paths["data_dir"] / "train.jsonl"))
+            synth = type(get_synthesizer(args.model, tabular=info.tabular)).load(
+                paths["checkpoint_dir"], tabular=info.tabular
+            )
 
-        for i in range(1, args.replicates + 1):
-            output_path = paths["samples_dir"] / f"synthetic_{i}.jsonl"
-            if output_path.exists():
-                existing = load_jsonl(output_path)
-                if len(existing) == n_train:
-                    print(
-                        f"Replicate {i}/{args.replicates}: "
-                        f"already exists ({len(existing)} records)"
-                    )
-                    continue
-            print(f"Replicate {i}/{args.replicates}: sampling {n_train} records...")
-            records = synth.sample(n_train)
-            save_jsonl(records, output_path)
-            print(f"Replicate {i}/{args.replicates}: saved {len(records)} records to {output_path}")
+            for i in range(1, args.replicates + 1):
+                output_path = paths["samples_dir"] / f"synthetic_{i}.jsonl"
+                if output_path.exists():
+                    existing = load_jsonl(output_path)
+                    if len(existing) == n_train:
+                        print(
+                            f"Replicate {i}/{args.replicates}: "
+                            f"already exists ({len(existing)} records)"
+                        )
+                        continue
+                print(f"Replicate {i}/{args.replicates}: sampling {n_train} records...")
+                records = synth.sample(n_train)
+                save_jsonl(records, output_path)
+                print(f"Replicate {i}/{args.replicates}: saved {len(records)} records to {output_path}")
 
 
 def cmd_eval(args: argparse.Namespace) -> None:
@@ -246,21 +283,27 @@ def cmd_eval(args: argparse.Namespace) -> None:
     _require_data(paths, args)
     _require_samples(paths, args)
 
-    evaluate_dataset(
-        args.dataset,
-        data_dir=paths["data_dir"],
-        samples_dir=paths["samples_dir"],
-        report_dir=paths["report_dir"],
-        dcr=args.dcr,
-    )
+    with _sync_context(args):
+        evaluate_dataset(
+            args.dataset,
+            data_dir=paths["data_dir"],
+            samples_dir=paths["samples_dir"],
+            report_dir=paths["report_dir"],
+            dcr=args.dcr,
+        )
 
 
 def cmd_all(args: argparse.Namespace) -> None:
     """Run the full pipeline: data -> train -> sample -> eval."""
-    cmd_data(args)
-    cmd_train(args)
-    cmd_sample(args)
-    cmd_eval(args)
+    with _sync_context(args):
+        # Clear remote so sub-commands don't each start their own sync
+        saved_remote = getattr(args, "remote", None)
+        args.remote = None
+        cmd_data(args)
+        cmd_train(args)
+        cmd_sample(args)
+        cmd_eval(args)
+        args.remote = saved_remote
 
 
 def main() -> None:
@@ -281,6 +324,13 @@ def main() -> None:
         p.add_argument(
             "--dcr", action="store_true", help="DCR mode: 50/50 split, privacy eval only"
         )
+        p.add_argument(
+            "--remote",
+            default=None,
+            metavar="S3_URL",
+            help="S3 URL to sync results to (e.g. s3://bucket/results). "
+            "Syncs every 5 minutes during training.",
+        )
 
     # data
     p_data = subparsers.add_parser("data", help="Download and prepare dataset")
@@ -296,6 +346,17 @@ def main() -> None:
         default=[],
         metavar="KEY=VALUE",
         help="Override config/model parameter (e.g. --param epochs=300)",
+    )
+    p_train.add_argument(
+        "--max-minutes",
+        type=float,
+        default=None,
+        help="Maximum training wall-clock time in minutes (default: no limit)",
+    )
+    p_train.add_argument(
+        "--no-wandb",
+        action="store_true",
+        help="Disable Weights & Biases logging (enabled by default when wandb is installed)",
     )
     p_train.set_defaults(func=cmd_train)
 
@@ -328,6 +389,17 @@ def main() -> None:
         default=[],
         metavar="KEY=VALUE",
         help="Override config/model parameter (e.g. --param epochs=300)",
+    )
+    p_all.add_argument(
+        "--max-minutes",
+        type=float,
+        default=None,
+        help="Maximum training wall-clock time in minutes (default: no limit)",
+    )
+    p_all.add_argument(
+        "--no-wandb",
+        action="store_true",
+        help="Disable Weights & Biases logging (enabled by default when wandb is installed)",
     )
     p_all.set_defaults(func=cmd_all)
 

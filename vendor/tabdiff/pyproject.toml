@@ -1,0 +1,21 @@
+[project]
+name = "tabdiff"
+version = "0.0.1"
+description = "TabDiff: Joint Diffusion of Tabular Data (vendored for origami-jsynth)"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.0.1",
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "scipy",
+    "category_encoders",
+    "imbalanced-learn",
+    "tomli>=2.0",
+    "tomli-w",
+    "tqdm",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

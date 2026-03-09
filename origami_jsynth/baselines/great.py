@@ -27,13 +27,20 @@ def _resolve_device() -> str:
 class GReaTAdapter:
     name = "great"
 
-    def __init__(self, tabular: bool = True, **kwargs: Any) -> None:
+    def __init__(self, tabular: bool = True, dataset_info: Any = None, **kwargs: Any) -> None:
         self.tabular = tabular
         self.kwargs = {**_DEFAULTS, **kwargs}
         self._model: Any = None
         self._state: PreprocessingState | None = None
 
-    def fit(self, records: list[dict[str, Any]], **kwargs: Any) -> None:
+    def fit(
+        self,
+        records: list[dict[str, Any]],
+        max_seconds: float | None = None,
+        wandb: bool = False,
+        dataset: str = "",
+        **kwargs: Any,
+    ) -> None:
         try:
             from be_great import GReaT
         except ImportError:
@@ -42,9 +49,25 @@ class GReaTAdapter:
                 "Install with: pip install origami-jsynth[baselines]"
             ) from None
 
+        from ._timeout import TrainingTimeout
+
         df, self._state = records_to_dataframe(records, self.tabular)
-        self._model = GReaT(**self.kwargs)
-        self._model.fit(df)
+
+        great_kwargs = dict(self.kwargs)
+        if wandb:
+            import os
+
+            os.environ.setdefault("WANDB_PROJECT", "origami-jsynth")
+            if dataset:
+                os.environ.setdefault("WANDB_RUN_GROUP", dataset)
+                os.environ.setdefault("WANDB_NAME", f"great-{dataset}")
+            great_kwargs["report_to"] = ["wandb"]
+        else:
+            great_kwargs.setdefault("report_to", [])
+
+        self._model = GReaT(**great_kwargs)
+        with TrainingTimeout(max_seconds):
+            self._model.fit(df)
 
     def sample(self, n: int) -> list[dict[str, Any]]:
         assert self._model is not None and self._state is not None

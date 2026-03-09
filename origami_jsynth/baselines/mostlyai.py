@@ -21,13 +21,13 @@ _DEFAULTS: dict[str, Any] = {
 class MostlyAIAdapter:
     name = "mostlyai"
 
-    def __init__(self, tabular: bool = True, **kwargs: Any) -> None:
+    def __init__(self, tabular: bool = True, dataset_info: Any = None, **kwargs: Any) -> None:
         self.tabular = tabular
         self.kwargs = {**_DEFAULTS, **kwargs}
         self._model: Any = None
         self._state: PreprocessingState | None = None
 
-    def fit(self, records: list[dict[str, Any]], **kwargs: Any) -> None:
+    def fit(self, records: list[dict[str, Any]], max_seconds: float | None = None, **kwargs: Any) -> None:
         try:
             from mostlyai.engine import TabularARGN
         except ImportError:
@@ -35,6 +35,8 @@ class MostlyAIAdapter:
                 "MOSTLY AI Engine requires the 'mostlyai-engine' package. "
                 "Install with: pip install mostlyai-engine"
             ) from None
+
+        from ._timeout import TrainingTimeout
 
         df, self._state = records_to_dataframe(records, self.tabular)
 
@@ -47,8 +49,14 @@ class MostlyAIAdapter:
             workspace.mkdir(parents=True, exist_ok=True)
             model_kwargs["workspace_dir"] = str(workspace)
 
+        # Also cap via the native max_training_time if --max-minutes is tighter
+        if max_seconds is not None:
+            native = model_kwargs.get("max_training_time", float("inf"))
+            model_kwargs["max_training_time"] = int(min(native, max_seconds))
+
         self._model = TabularARGN(**model_kwargs)
-        self._model.fit(df)
+        with TrainingTimeout(max_seconds):
+            self._model.fit(df)
 
     def sample(self, n: int) -> list[dict[str, Any]]:
         assert self._model is not None and self._state is not None

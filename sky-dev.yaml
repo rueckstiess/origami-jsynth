@@ -1,0 +1,42 @@
+name: sky-dev
+
+resources:
+  accelerators:
+    - V100:1
+  cloud: vast
+  use_spot: false
+  disk_size: 50
+
+workdir: .
+
+setup: |
+  # Install uv
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$PATH"
+
+  # Install AWS CLI (for S3 sync)
+  pip install awscli
+
+  # Install package with baselines
+  cd ~/sky_workdir
+  uv sync --extra baselines
+
+  # Configure AWS credentials from secrets passed via --secret flags
+  mkdir -p ~/.aws
+  cat > ~/.aws/credentials <<CREDS
+  [default]
+  aws_access_key_id = ${AWS_ACCESS_KEY_ID}
+  aws_secret_access_key = ${AWS_SECRET_ACCESS_KEY}
+  CREDS
+  cat > ~/.aws/config <<CONF
+  [default]
+  region = us-east-1
+  CONF
+
+run: |
+  export PATH="$HOME/.local/bin:$PATH"
+  cd ~/sky_workdir
+  source .venv/bin/activate
+
+  # Run experiments here, e.g.:
+  # origami-jsynth all --dataset adult --model origami -R 10 --remote s3://yanex-experiments/origami-jsynth/results

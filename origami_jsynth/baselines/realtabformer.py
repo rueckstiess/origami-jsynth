@@ -85,9 +85,12 @@ def _patch_save(model: Any) -> None:
 class REaLTabFormerAdapter:
     name = "realtabformer"
 
-    def __init__(self, tabular: bool = True, **kwargs: Any) -> None:
+    def __init__(self, tabular: bool = True, dataset_info: Any = None, **kwargs: Any) -> None:
         self.tabular = tabular
         merged = {**_DEFAULTS, **kwargs}
+        # Map dataset target_column to realtabformer's target_col fit param.
+        if dataset_info and dataset_info.target_column:
+            merged.setdefault("target_col", dataset_info.target_column)
         self.fit_kwargs: dict[str, Any] = {}
         for key in list(merged):
             if key in _FIT_PARAMS:
@@ -100,6 +103,10 @@ class REaLTabFormerAdapter:
         self,
         records: list[dict[str, Any]],
         checkpoint_dir: Path | None = None,
+        max_seconds: float | None = None,
+        wandb: bool = False,
+        dataset: str = "",
+        **kwargs: Any,
     ) -> None:
         try:
             from realtabformer import REaLTabFormer
@@ -114,6 +121,18 @@ class REaLTabFormerAdapter:
         # Redirect RTF's internal working directories into the checkpoint
         # directory so they don't pollute the working directory.
         kwargs = dict(self.kwargs)
+
+        # Configure wandb via HF TrainingArguments report_to
+        if wandb:
+            import os
+
+            os.environ.setdefault("WANDB_PROJECT", "origami-jsynth")
+            if dataset:
+                os.environ.setdefault("WANDB_RUN_GROUP", dataset)
+                os.environ.setdefault("WANDB_NAME", f"realtabformer-{dataset}")
+            kwargs["report_to"] = ["wandb"]
+        else:
+            kwargs.setdefault("report_to", [])
         if checkpoint_dir is not None:
             checkpoint_dir = Path(checkpoint_dir)
             checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -134,7 +153,11 @@ class REaLTabFormerAdapter:
         # gen_kwargs defaults to None upstream, causing **None TypeError during
         # early-stopping sampling. Pass empty dict to work around the bug.
         fit_kwargs = {**self.fit_kwargs, "gen_kwargs": {}}
-        self._model.fit(df, **fit_kwargs)
+
+        from ._timeout import TrainingTimeout
+
+        with TrainingTimeout(max_seconds):
+            self._model.fit(df, **fit_kwargs)
 
     def sample(self, n: int) -> list[dict[str, Any]]:
         assert self._model is not None and self._state is not None

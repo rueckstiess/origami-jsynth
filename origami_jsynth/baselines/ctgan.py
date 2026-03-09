@@ -21,13 +21,13 @@ _DEFAULTS = {
 class CTGANAdapter:
     name = "ctgan"
 
-    def __init__(self, tabular: bool = True, **kwargs: Any) -> None:
+    def __init__(self, tabular: bool = True, dataset_info: Any = None, **kwargs: Any) -> None:
         self.tabular = tabular
         self.kwargs = {**_DEFAULTS, **kwargs}
         self._model: Any = None
         self._state: PreprocessingState | None = None
 
-    def fit(self, records: list[dict[str, Any]], **kwargs: Any) -> None:
+    def fit(self, records: list[dict[str, Any]], max_seconds: float | None = None, **kwargs: Any) -> None:
         try:
             from sdv.single_table import CTGANSynthesizer
         except ImportError:
@@ -36,10 +36,13 @@ class CTGANAdapter:
                 "Install with: pip install origami-jsynth[baselines]"
             ) from None
 
+        from ._timeout import TrainingTimeout
+
         df, self._state = records_to_dataframe(records, self.tabular)
         metadata = build_metadata(df)
         self._model = CTGANSynthesizer(metadata, **self.kwargs)
-        self._model.fit(df)
+        with TrainingTimeout(max_seconds):
+            self._model.fit(df)
 
     def sample(self, n: int) -> list[dict[str, Any]]:
         assert self._model is not None and self._state is not None

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,98 @@ from origami.training import TrainResult
 from origami.training.callbacks import TableLogCallback, TrainerCallback
 
 from .data import load_jsonl
+
+
+class TimeoutCallback(TrainerCallback):
+    """Stop training after a wall-clock time limit."""
+
+    def __init__(self, max_seconds: float) -> None:
+        super().__init__()
+        self.max_seconds = max_seconds
+        self._start: float = 0.0
+
+    def on_train_begin(self, _trainer: Any, _state: Any, _payload: Any) -> None:
+        self._start = time.time()
+        print(f"Training timeout set: {self.max_seconds / 60:.1f} minutes")
+
+    def on_epoch_end(self, _trainer: Any, _state: Any, _payload: Any) -> None:
+        elapsed = time.time() - self._start
+        if elapsed >= self.max_seconds:
+            print(
+                f"\nTimeout reached: {elapsed / 60:.1f} min elapsed "
+                f"(limit: {self.max_seconds / 60:.1f} min). Stopping training."
+            )
+            raise KeyboardInterrupt
+
+
+class WandbCallback(TrainerCallback):
+    """Log training metrics to Weights & Biases."""
+
+    def __init__(
+        self,
+        project: str,
+        name: str,
+        config: dict,
+        group: str | None = None,
+        log_every: int = 100,
+    ) -> None:
+        super().__init__()
+        self.project = project
+        self.name = name
+        self.config = config
+        self.group = group
+        self.log_every = log_every
+        self.run = None
+
+    def on_train_begin(self, trainer: Any, state: Any, _payload: Any) -> None:
+        if not trainer.is_main_process:
+            return
+        import wandb
+
+        self.run = wandb.init(
+            project=self.project,
+            name=self.name,
+            resume="allow",
+            config=self.config,
+            group=self.group,
+            job_type="train",
+        )
+        wandb.define_metric("loss", step_metric="epoch")
+        wandb.define_metric("val_loss", step_metric="epoch")
+
+    def on_batch_end(self, trainer: Any, state: TrainResult, _payload: Any) -> None:
+        if not trainer.is_main_process or self.run is None:
+            return
+        if state.global_step % self.log_every != 0:
+            return
+        self.run.log(
+            {
+                "loss": state.current_batch_loss,
+                "lr": state.current_lr,
+                "batch_dt": state.current_batch_dt,
+                "epoch": state.epoch,
+            },
+            step=state.global_step,
+        )
+
+    def on_evaluate(self, trainer: Any, state: TrainResult, payload: dict[str, float]) -> None:
+        if not trainer.is_main_process or self.run is None or not payload:
+            return
+        self.run.log({**payload, "epoch": state.epoch}, step=state.global_step)
+
+    def on_best(self, _trainer: Any, _state: TrainResult, payload: dict[str, float]) -> None:
+        if self.run is None or not payload:
+            return
+        for k, v in payload.items():
+            self.run.summary[f"best_{k}"] = v
+
+    def on_train_end(self, _trainer: Any, _state: Any, _payload: Any) -> None:
+        if self.run:
+            self.run.finish()
+
+    def on_interrupt(self, _trainer: Any, _state: Any, _payload: Any) -> None:
+        if self.run:
+            self.run.finish(exit_code=1)
 
 
 class CheckpointCallback(TrainerCallback):
@@ -102,6 +195,8 @@ def train_dataset(
     *,
     overrides: list[str] | None = None,
     seed: int = 42,
+    max_seconds: float | None = None,
+    wandb: bool = False,
 ) -> Path:
     """Train an Origami model on a prepared dataset.
 
@@ -154,7 +249,7 @@ def train_dataset(
     num_epochs = origami_config.get("training", {}).get("num_epochs", 100)
     save_every = max(1, num_epochs // 10)
 
-    callbacks = [
+    callbacks: list[TrainerCallback] = [
         TableLogCallback(print_every=100),
         CheckpointCallback(
             pipeline=pipeline,
@@ -163,6 +258,17 @@ def train_dataset(
             save_best=True,
         ),
     ]
+    if max_seconds is not None:
+        callbacks.append(TimeoutCallback(max_seconds))
+    if wandb:
+        callbacks.append(
+            WandbCallback(
+                project="origami-jsynth",
+                name=f"origami-{dataset}",
+                config=origami_config,
+                group=dataset,
+            )
+        )
 
     pipeline.fit(train_records, eval_data=eval_records, callbacks=callbacks, verbose=True)
 
