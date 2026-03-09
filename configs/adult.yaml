@@ -4,6 +4,7 @@ data:
   numeric_mode: scale
   infer_schema: true
   n_bins: 100
+  model_array_lengths: false
 model:
   backbone: cached_transformer
   d_model: 64
@@ -21,6 +22,8 @@ training:
   dataloader_num_workers: 0
   num_epochs: 400
   warmup_steps: 1000
+  lr_scheduler: cosine
+  lr_cosine_exponent: 2.0
   shuffle_keys: true
   eval_strategy: epoch
   eval_epochs: 5

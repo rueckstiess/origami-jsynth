@@ -2,6 +2,7 @@ data:
   cat_threshold: 128
   infer_schema: true
   max_vocab_size: 0
+  model_array_lengths: false
   n_bins: 100
   numeric_mode: scale
 model:
@@ -28,6 +29,8 @@ training:
   shuffle_keys: true
   target_loss_weight: 1.0
   warmup_steps: 1000
+  lr_scheduler: cosine
+  lr_cosine_exponent: 2.0
 inference:
   constrain_grammar: true
   constrain_schema: true

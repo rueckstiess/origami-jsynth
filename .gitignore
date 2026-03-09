@@ -6,6 +6,7 @@
 
 # Results (generated data, checkpoints, samples, reports)
 results*/
+test/
 
 # Python
 __pycache__/
@@ -19,3 +20,9 @@ __pycache__/
 # IDE
 .idea/
 .vscode/
+
+# Artifacts
+*.pdf
+*.png
+*.tgz
+*.tar.gz
