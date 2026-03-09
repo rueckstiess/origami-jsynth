@@ -14,7 +14,7 @@ dependencies = [
     "pyyaml>=6.0",
     "nbformat>=4.2.0",
     "itables>=2.7.0",
-    "origami-ml==2.0.0a12",
+    "origami-ml==2.0.0a13",
 ]
 
 [project.optional-dependencies]
