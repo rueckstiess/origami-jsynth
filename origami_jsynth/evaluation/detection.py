@@ -175,8 +175,8 @@ def _fit_predict_xgboost(
     from xgboost import XGBClassifier  # Lazy import to avoid PyTorch conflict
 
     model = XGBClassifier(
-        n_estimators=100,
-        max_depth=6,
+        n_estimators=10,
+        max_depth=3,
         learning_rate=0.3,
         random_state=random_state,
         n_jobs=-1,
