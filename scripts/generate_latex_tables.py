@@ -13,13 +13,14 @@ YANEX_DIR = Path(__file__).resolve().parent.parent.parent / "origami-data-gen"
 YANEX_EXPERIMENTS_DIR = Path.home() / ".yanex" / "experiments"
 
 # Datasets and their DCR counterparts
-DATASETS = ["adult", "diabetes", "electric_vehicles", "yelp", "ddxplus"]
+DATASETS = ["adult", "diabetes", "electric_vehicles", "yelp", "ddxplus", "github_issues"]
 DATASET_LABELS = {
     "adult": "Adult",
     "diabetes": "Diabetes",
     "electric_vehicles": "\\shortstack{Electric\\\\Vehicles}",
     "ddxplus": "DDXPlus",
     "yelp": "Yelp",
+    "github_issues": "\\shortstack{GitHub\\\\Issues}",
 }
 
 # Models in display order
@@ -152,6 +153,8 @@ def parse_yanex_name(name):
         dataset = "ddxplus"
     elif name.startswith("yelp-"):
         dataset = "yelp"
+    elif name.startswith("github-"):
+        dataset = "github_issues"
     else:
         return None
 

@@ -12,6 +12,7 @@ DATASETS = {
     "diabetes": "8fb645ce",
     "electric_vehicles": "0618fea3",
     "ddxplus": "411be808",
+    "github_issues": "29630d99",
 }
 
 YANEX_DIR = Path.home() / ".yanex" / "experiments"

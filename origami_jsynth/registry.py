@@ -69,6 +69,14 @@ DATASETS: dict[str, DatasetInfo] = {
         has_canonical_split=False,
         hf_path="mtg",
     ),
+    "github_issues": DatasetInfo(
+        name="github_issues",
+        target_column="action",
+        task_type="multiclass",
+        tabular=False,
+        has_canonical_split=False,
+        hf_path="github_issues",
+    ),
     "yelp": DatasetInfo(
         name="yelp",
         target_column="is_open",
