@@ -63,7 +63,6 @@ def train(
     learnable_schedule: bool = True,
     config_overrides: dict | None = None,
     ckpt_path: str | None = None,
-    skip_eval: bool = False,
     max_seconds: float | None = None,
     logger: Any | None = None,
 ) -> TrainResult:
@@ -77,7 +76,6 @@ def train(
         learnable_schedule: Whether to use per-column learnable noise schedules.
         config_overrides: Dict of overrides for raw_config (e.g. batch_size, lr).
         ckpt_path: Optional path to resume training from.
-        skip_eval: Skip sample generation and evaluation during training.
 
     Returns:
         TrainResult with model_save_path and the raw_config used.
@@ -199,7 +197,6 @@ def train(
         result_save_path=result_save_path,
         device=device,
         ckpt_path=ckpt_path,
-        skip_eval=skip_eval,
         max_seconds=max_seconds,
     )
 

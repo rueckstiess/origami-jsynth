@@ -368,7 +368,6 @@ class TabDiffAdapter:
                 device=device,
                 learnable_schedule=True,
                 config_overrides=config_overrides if config_overrides else None,
-                skip_eval=self.kwargs.get("skip_eval", False),
                 max_seconds=max_seconds,
                 logger=logger,
             )

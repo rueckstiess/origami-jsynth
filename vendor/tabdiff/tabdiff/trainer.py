@@ -36,7 +36,6 @@ class Trainer:
             device=torch.device('cuda:1'),
             ckpt_path = None,
             y_only=False,
-            skip_eval=False,
             max_seconds=None,
             **kwargs
     ):
@@ -76,7 +75,6 @@ class Trainer:
         self.device = device
         self.model_save_path = model_save_path
         self.result_save_path = result_save_path
-        self.skip_eval = skip_eval
         self.ckpt_path = ckpt_path
         if self.ckpt_path is not None:
             state_dicts = torch.load(self.ckpt_path, map_location=self.device)
@@ -252,33 +250,7 @@ class Trainer:
             else:
                 patience += 1   # increment patience if best loss is not surpassed
             
-            # Compute and log EMA model loss (skip when skip_eval to avoid full dataset forward pass)
-            ema_total_loss = None
-            if not self.skip_eval:
-                curr_model, curr_num_schedule, curr_cat_schedule = self.to_ema_model()
-                ema_mloss, ema_gloss = self.compute_loss()
-                self.to_model(curr_model, curr_num_schedule, curr_cat_schedule)
-                ema_total_loss = ema_mloss + ema_gloss
-                ema_loss_dict = {
-                    "ema_loss/c_loss": ema_gloss,
-                    "ema_loss/d_loss": ema_mloss,
-                    "ema_loss/total_loss": ema_total_loss
-                }
-
-                # Save the best ema ckpt
-                if ema_total_loss < best_ema_loss and self.curr_epoch > self.check_val_every:
-                    best_ema_loss = ema_total_loss
-                    to_remove = glob.glob(os.path.join(self.model_save_path, f"best_ema_model_*"))
-                    if to_remove:
-                        os.remove(to_remove[0])
-                    state_dicts = {
-                        'denoise_fn': self.ema_model.state_dict(),
-                        'num_schedule':self.ema_num_schedule.state_dict(),
-                        'cat_schedule': self.ema_cat_schedule.state_dict(),
-                    }
-                    torch.save(state_dicts, os.path.join(self.model_save_path, f'best_ema_model_{np.round(ema_total_loss,4)}_{epoch+1}.pt'))
-            
-            # Save checkpoints and optionally evaluate sample quality
+            # Save checkpoints, compute EMA loss, and track best EMA model
             if (epoch+1) % self.check_val_every == 0:
                 state_dicts = {
                     'denoise_fn': self.diffusion._denoise_fn.state_dict(),
@@ -295,19 +267,25 @@ class Trainer:
                 }
                 torch.save(ema_state_dicts, os.path.join(self.model_save_path, f'ema_model_{epoch+1}.pt'))
 
-                if not self.skip_eval:
-                    print_with_bar(f"Routine Generation Evaluation every {self.check_val_every}, currently at epoch #{epoch+1}, wiht total_loss={total_loss}.")
-                    out_metrics, _, _ = self.evaluate_generation(save_metric_details=True, plot_density=True)
-                    log_dict.update(out_metrics)
-                    print(f"Eval Resutls of the Non-EMA model:\n {out_metrics}")
+                # Compute EMA model loss and save best checkpoint
+                curr_model, curr_num_schedule, curr_cat_schedule = self.to_ema_model()
+                ema_mloss, ema_gloss = self.compute_loss()
+                self.to_model(curr_model, curr_num_schedule, curr_cat_schedule)
+                ema_total_loss = ema_mloss + ema_gloss
+                log_dict.update({
+                    "ema_loss/c_loss": ema_gloss,
+                    "ema_loss/d_loss": ema_mloss,
+                    "ema_loss/total_loss": ema_total_loss,
+                })
 
-                    ema_out_metrics, _, _ = self.evaluate_generation(ema=True, save_metric_details=True, plot_density=True)
-                    log_dict.update({
-                        "ema": ema_out_metrics,
-                    })
-                    print(f"Eval Resutls of the EMA model:\n {ema_out_metrics}")
-                else:
-                    print_with_bar(f"Checkpoint saved at epoch #{epoch+1} (eval skipped), total_loss={total_loss}, ema_total_loss={ema_total_loss}")
+                if ema_total_loss < best_ema_loss and self.curr_epoch > self.check_val_every:
+                    best_ema_loss = ema_total_loss
+                    to_remove = glob.glob(os.path.join(self.model_save_path, f"best_ema_model_*"))
+                    if to_remove:
+                        os.remove(to_remove[0])
+                    torch.save(ema_state_dicts, os.path.join(self.model_save_path, f'best_ema_model_{np.round(ema_total_loss,4)}_{epoch+1}.pt'))
+
+                print_with_bar(f"Checkpoint saved at epoch #{epoch+1}, total_loss={total_loss}, ema_total_loss={ema_total_loss}")
             
             # Submit logs
             self.logger.log(log_dict)
