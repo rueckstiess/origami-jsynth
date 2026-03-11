@@ -1,12 +1,7 @@
 # Autoregressive Synthesis of Sparse and Semi-Structured Mixed-Type Data
 
-Reproduction package for Origami tabular/JSON synthesis experiments and baselines for the publication
-"Autoregressive Synthesis of Sparse and Semi-Structured Mixed-Type Data".
-
-
-> The Origami model architecture is published as a standalone package `origami-ml` for flexible use in various contexts.
-> If you want to train an Origami model on your own datasets or for use cases beyond synthetic data generation, we recommend 
-> you use the [Origami repository](https://github.com/rueckstiess/origami/) directly.
+Reproduction package for Origami tabular/JSON synthesis experiments and baselines for the publication:
+[Autoregressive Synthesis of Sparse and Semi-Structured Mixed-Type Data](https://arxiv.org/abs/2603.01444).
 
 
 ## Setup
@@ -28,7 +23,7 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-To run baseline synthesizers (CTGAN, TVAE, GReaT, REaLTabFormer, Mostly AI), instead install with the `baselines` extra:
+To run baseline synthesizers (CTGAN, TVAE, GReaT, REaLTabFormer, Mostly AI, TabDiff), instead install with the `baselines` extra:
 
 ```bash
 pip install -e ".[baselines]"
@@ -53,7 +48,7 @@ origami-jsynth eval --dataset adult --model origami
 
 Results are saved to `./results/<dataset>/<model>/`.
 
-## Quick Sanity Check
+### Quick end-to-end run
 
 To verify the full pipeline works end-to-end (splitting, training, sampling, evaluation):
 
@@ -61,7 +56,7 @@ To verify the full pipeline works end-to-end (splitting, training, sampling, eva
 origami-jsynth all --dataset adult --model origami -R 2 --param training.num_epochs=5
 ```
 
-This completes in approximately 5 minutes with an MPS or CUDA device. The evaluation results from this quick run are not representative of the final results reported in the paper, which require significantly longer training (~400 epochs on the adult dataset).
+This completes in approximately 5 minutes with an MPS or CUDA device. The evaluation results from this quick run are not representative of the final results reported in the paper, which require significantly longer training (the paper uses 400 epochs on the adult dataset).
 
 ## Baselines
 
@@ -172,3 +167,20 @@ results/
 └── adult_dcr/                   # DCR privacy run (--dcr flag)
     └── ...                      # same layout as above
 ```
+
+
+## Ablation Experiments
+
+To reproduce the ablation experiments from the paper, check out the notebooks in the `notebooks/` directory. 
+These are not integrated into the CLI and require manual execution:
+
+- [Kernel Density Plots on Electric Vehicles](notebooks/kde_electric_vehicles.ipynb)
+- [KVPE vs. sequential position encoding](notebooks/kvpe_ablation.ipynb)
+- [Shuffled vs. unshuffled key order](notebooks/shuffle_keys_ablation.ipynb)
+
+
+## Origami standalone package
+
+The Origami model architecture is published as a standalone package `origami-ml` for flexible use in various contexts.
+If you want to train an Origami model on your own datasets or for use cases beyond synthetic data generation, we recommend 
+you use the [Origami repository](https://github.com/rueckstiess/origami/) directly.
