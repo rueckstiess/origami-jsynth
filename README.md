@@ -184,3 +184,18 @@ These are not integrated into the CLI and require manual execution:
 The Origami model architecture is published as a standalone package `origami-ml` for flexible use in various contexts.
 If you want to train an Origami model on your own datasets or for use cases beyond synthetic data generation, we recommend 
 you use the [Origami repository](https://github.com/rueckstiess/origami/) directly.
+
+## Citation
+
+If you find this work useful, please consider citing our paper:
+
+```bibtex
+@misc{rueckstiess2026origami,
+  title={Autoregressive Synthesis of Sparse and Semi-Structured Mixed-Type Data},
+  author={R{\"u}ckstie{\ss}, Thomas and Vujanic, Robin},
+  year={2026},
+  eprint={2603.01444},
+  archivePrefix={arXiv},
+  primaryClass={cs.LG}
+}
+```
