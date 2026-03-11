@@ -197,6 +197,7 @@ def train_dataset(
     seed: int = 42,
     max_seconds: float | None = None,
     wandb: bool = False,
+    wandb_dataset: str | None = None,
 ) -> Path:
     """Train an Origami model on a prepared dataset.
 
@@ -261,12 +262,13 @@ def train_dataset(
     if max_seconds is not None:
         callbacks.append(TimeoutCallback(max_seconds))
     if wandb:
+        wb_name = wandb_dataset or dataset
         callbacks.append(
             WandbCallback(
                 project="origami-jsynth",
-                name=f"origami-{dataset}",
+                name=f"origami-{wb_name}",
                 config=origami_config,
-                group=dataset,
+                group=wb_name,
             )
         )
 

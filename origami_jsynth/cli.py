@@ -181,6 +181,7 @@ def cmd_train(args: argparse.Namespace) -> None:
 
     max_seconds = args.max_minutes * 60 if getattr(args, "max_minutes", None) else None
     use_wandb = _wandb_available() and not getattr(args, "no_wandb", False)
+    wandb_dataset = f"{args.dataset}-dcr" if args.dcr else args.dataset
 
     if use_wandb:
         import os
@@ -204,6 +205,7 @@ def cmd_train(args: argparse.Namespace) -> None:
                 overrides=args.param,
                 max_seconds=max_seconds,
                 wandb=use_wandb,
+                wandb_dataset=wandb_dataset,
             )
         else:
             from .baselines import get_synthesizer
@@ -221,7 +223,7 @@ def cmd_train(args: argparse.Namespace) -> None:
                 checkpoint_dir=paths["checkpoint_dir"],
                 max_seconds=max_seconds,
                 wandb=use_wandb,
-                dataset=args.dataset,
+                dataset=wandb_dataset,
             )
             synth.save(paths["checkpoint_dir"])
             print(f"Model saved to {paths['checkpoint_dir']}")
