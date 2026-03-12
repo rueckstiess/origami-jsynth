@@ -104,6 +104,8 @@ def train(
             ]
         if "steps" in config_overrides:
             raw_config["train"]["main"]["steps"] = config_overrides["steps"]
+        if "clip_gradients" in config_overrides:
+            raw_config["train"]["main"]["clip_gradients"] = config_overrides["clip_gradients"]
 
     # Paths
     exp_name = "learnable_schedule" if learnable_schedule else "non_learnable_schedule"
@@ -271,6 +273,8 @@ def sample(
                 "Train a model first."
             )
         ckpt_path = ckpt_files[0]
+
+    print(f"Sampling from checkpoint: {ckpt_path}")
 
     # Load config from checkpoint directory
     config_pkl = os.path.join(os.path.dirname(ckpt_path), "config.pkl")

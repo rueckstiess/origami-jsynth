@@ -37,10 +37,12 @@ class Trainer:
             ckpt_path = None,
             y_only=False,
             max_seconds=None,
+            clip_gradients=None,
             **kwargs
     ):
         self.y_only = y_only
         self.max_seconds = max_seconds
+        self.clip_gradients = clip_gradients
         self.diffusion = diffusion
         self.ema_model = deepcopy(self.diffusion._denoise_fn)
         for param in self.ema_model.parameters():
@@ -102,7 +104,8 @@ class Trainer:
 
         loss = dloss_weight * dloss + closs_weight * closs
         loss.backward()
-        # torch.nn.utils.clip_grad_norm_(self.diffusion.parameters(), max_norm=2.0)
+        if self.clip_gradients is not None:
+            torch.nn.utils.clip_grad_norm_(self.diffusion.parameters(), max_norm=self.clip_gradients)
         self.optimizer.step()
 
         return dloss, closs

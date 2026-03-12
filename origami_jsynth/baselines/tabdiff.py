@@ -342,11 +342,14 @@ class TabDiffAdapter:
 
         # Step 8: Build config overrides from kwargs
         config_overrides = {}
-        for key in ("steps", "batch_size", "lr", "check_val_every", "sample_batch_size"):
+        for key in ("steps", "batch_size", "lr", "check_val_every", "sample_batch_size", "clip_gradients"):
             if key in self.kwargs:
                 config_overrides[key] = self.kwargs[key]
 
-        # Step 9: Train
+        # Step 9: Save adapter state before training so it survives interruptions
+        self.save(checkpoint_dir)
+
+        # Step 10: Train
         logger = None
         if wandb:
             import wandb as _wandb
@@ -408,9 +411,8 @@ class TabDiffAdapter:
             sample_batch_size=sample_batch_size,
         )
 
-        # Reverse type separation
-        if self._column_map is not None:
-            syn_df = merge_types(syn_df, column_map=self._column_map)
+        # Reverse type separation (column_map=None triggers auto-inference)
+        syn_df = merge_types(syn_df, column_map=self._column_map)
 
         # Unflatten if nested
         if self._is_nested:

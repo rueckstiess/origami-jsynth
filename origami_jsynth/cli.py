@@ -260,6 +260,9 @@ def cmd_sample(args: argparse.Namespace) -> None:
             synth = type(get_synthesizer(args.model, tabular=info.tabular)).load(
                 paths["checkpoint_dir"], tabular=info.tabular
             )
+            if args.param:
+                overrides = _parse_overrides(args.param)
+                synth.kwargs.update(overrides)
 
             for i in range(1, args.replicates + 1):
                 output_path = paths["samples_dir"] / f"synthetic_{i}.jsonl"
@@ -369,6 +372,13 @@ def main() -> None:
     p_sample.add_argument(
         "-R", "--replicates", type=int, default=1,
         help="Number of independent sampling rounds (default: 1)",
+    )
+    p_sample.add_argument(
+        "--param",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Override sampling parameter (e.g. --param sample_batch_size=512)",
     )
     p_sample.set_defaults(func=cmd_sample)
 
