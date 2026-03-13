@@ -245,15 +245,18 @@ def cmd_sample(args: argparse.Namespace) -> None:
             from .sample import sample_dataset
 
             sample_overrides = _parse_overrides(args.param) if args.param else {}
+            sample_kwargs = dict(
+                num_workers=args.num_workers,
+                replicates=args.replicates,
+            )
+            sample_kwargs.update(sample_overrides)
             sample_dataset(
                 args.dataset,
                 checkpoint_dir=paths["checkpoint_dir"],
                 samples_dir=paths["samples_dir"],
-                num_workers=args.num_workers,
                 tabular=info.tabular,
                 data_dir=paths["data_dir"],
-                replicates=args.replicates,
-                **sample_overrides,
+                **sample_kwargs,
             )
         else:
             from .baselines import get_synthesizer

@@ -182,7 +182,6 @@ Neural network-based autoregressive synthesizer (MostlyAI Engine).
 
 | Parameter | Default | Description |
 |---|---|---|
-| `max_training_time` | 14400 | Maximum training time in seconds (4 hours) |
 | `verbose` | 1 | Verbosity level |
 
 Additional `TabularARGN` parameters are passed through.
@@ -190,8 +189,7 @@ Additional `TabularARGN` parameters are passed through.
 **Example:**
 
 ```bash
-origami-jsynth train --model mostlyai --dataset adult \
-  --param max_training_time=7200
+origami-jsynth train --model mostlyai --dataset adult
 ```
 
 ---

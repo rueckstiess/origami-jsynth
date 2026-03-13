@@ -57,6 +57,11 @@ class MostlyAIAdapter:
         self._model = TabularARGN(**model_kwargs)
         with TrainingTimeout(max_seconds):
             self._model.fit(df)
+        # If training was interrupted by our timeout, the engine never sets its
+        # internal _fitted flag even though checkpoints were saved.  Force it so
+        # that save/sample work after a timeout-interrupted run.
+        if hasattr(self._model, "_fitted") and not self._model._fitted:
+            self._model._fitted = True
 
     def sample(self, n: int) -> list[dict[str, Any]]:
         assert self._model is not None and self._state is not None
@@ -82,5 +87,9 @@ class MostlyAIAdapter:
         adapter = cls(tabular=tabular)
         with open(path / "model.pkl", "rb") as f:
             adapter._model = pickle.load(f)
+        # A saved model was trained; ensure the fitted flag is set even if
+        # training was interrupted before the engine could set it.
+        if hasattr(adapter._model, "_fitted") and not adapter._model._fitted:
+            adapter._model._fitted = True
         adapter._state = PreprocessingState.load(path / "preprocess_state.pkl")
         return adapter

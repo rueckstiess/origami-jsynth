@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pickle
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +53,9 @@ class PreprocessingState:
 
     is_nested: bool
     column_map: dict[str, list[str]]
+    # Original pandas dtypes for passthrough (unseparated) columns.
+    # Synthesizers may change dtypes (e.g., bool → StringDtype "True"/"False").
+    passthrough_dtypes: dict[str, str] = field(default_factory=dict)
 
     def save(self, path: Path) -> None:
         with open(path, "wb") as f:
@@ -61,7 +64,11 @@ class PreprocessingState:
     @classmethod
     def load(cls, path: Path) -> PreprocessingState:
         with open(path, "rb") as f:
-            return pickle.load(f)
+            state = pickle.load(f)
+        # Backward compat: older pickles lack passthrough_dtypes
+        if not hasattr(state, "passthrough_dtypes"):
+            state.passthrough_dtypes = {}
+        return state
 
 
 def records_to_dataframe(
@@ -77,7 +84,19 @@ def records_to_dataframe(
     """
     df = flatten_records(records, include_non_leaf=False)
     result = separate_types(df, force=False)
-    return result.df, PreprocessingState(is_nested=not tabular, column_map=result.column_map)
+
+    # Record original dtypes of passthrough columns so we can restore them
+    # after sampling (synthesizers may change dtypes, e.g. bool → string).
+    passthrough_dtypes: dict[str, str] = {}
+    for col, typed_cols in result.column_map.items():
+        if len(typed_cols) == 1 and typed_cols[0] == col:
+            passthrough_dtypes[col] = str(result.df[col].dtype)
+
+    return result.df, PreprocessingState(
+        is_nested=not tabular,
+        column_map=result.column_map,
+        passthrough_dtypes=passthrough_dtypes,
+    )
 
 
 def dataframe_to_records(
@@ -90,6 +109,28 @@ def dataframe_to_records(
     For semi-structured data, also unflattens nested structure.
     """
     merged = merge_types(df, column_map=state.column_map)
+
+    # Restore dtypes that synthesizers may have changed (e.g., bool → string).
+    # Use stored passthrough_dtypes when available; for old checkpoints that
+    # lack it, detect string-encoded booleans in passthrough columns heuristically.
+    for col, typed_cols in state.column_map.items():
+        if col not in merged.columns:
+            continue
+        if len(typed_cols) != 1 or typed_cols[0] != col:
+            continue  # type-separated column, handled by merge_types
+        if pd.api.types.is_bool_dtype(merged[col]):
+            continue  # already boolean
+
+        orig_dtype = state.passthrough_dtypes.get(col)
+        if orig_dtype == "bool" or (
+            orig_dtype is None
+            and (merged[col].dtype == object or isinstance(merged[col].dtype, pd.StringDtype))
+            and merged[col].dropna().isin(["True", "False", True, False]).all()
+        ):
+            merged[col] = merged[col].map(
+                {"True": True, "False": False, True: True, False: False}
+            )
+
     if not state.is_nested:
         return merged.to_dict(orient="records")
     return unflatten_dataframe(merged)
