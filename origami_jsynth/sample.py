@@ -119,6 +119,7 @@ def sample_dataset(
     data_dir: Path | None = None,
     replicates: int = 1,
     seed_base: int = 42,
+    **sample_kwargs: Any,
 ) -> list[Path]:
     """Sample from a trained model and save results.
 
@@ -154,9 +155,10 @@ def sample_dataset(
         train_records = load_jsonl(data_dir / "train.jsonl")
         n_train = len(train_records)
 
-    sample_kwargs = {}
+    generate_kwargs: dict[str, Any] = {}
     if not tabular:
-        sample_kwargs["allow_complex_values"] = True
+        generate_kwargs["allow_complex_values"] = True
+    generate_kwargs.update(sample_kwargs)
 
     output_paths: list[Path] = []
     for i in range(1, replicates + 1):
@@ -186,7 +188,7 @@ def sample_dataset(
             num_workers=num_workers,
             batch_size=batch_size,
             seed=seed,
-            **sample_kwargs,
+            **generate_kwargs,
         )
 
         save_jsonl(records, output_path)

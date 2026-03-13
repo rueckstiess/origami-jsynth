@@ -244,6 +244,7 @@ def cmd_sample(args: argparse.Namespace) -> None:
         if args.model == "origami":
             from .sample import sample_dataset
 
+            sample_overrides = _parse_overrides(args.param) if args.param else {}
             sample_dataset(
                 args.dataset,
                 checkpoint_dir=paths["checkpoint_dir"],
@@ -252,6 +253,7 @@ def cmd_sample(args: argparse.Namespace) -> None:
                 tabular=info.tabular,
                 data_dir=paths["data_dir"],
                 replicates=args.replicates,
+                **sample_overrides,
             )
         else:
             from .baselines import get_synthesizer
