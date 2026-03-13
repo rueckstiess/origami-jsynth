@@ -445,12 +445,16 @@ class TabDiffAdapter:
         adapter._is_nested = meta["is_nested"]
         adapter._column_map = meta["column_map"]
         adapter._info = meta["info"]
-        adapter._data_dir = meta["data_dir"]
-        adapter._save_dir = meta["save_dir"]
         adapter._dataset_name = meta["dataset_name"]
         adapter.target_column = meta["target_column"]
         adapter.task_type = meta["task_type"]
         adapter.kwargs = meta["kwargs"]
+
+        # Reconstruct paths relative to the current checkpoint directory
+        # instead of using the absolute paths from the original machine.
+        work_dir = str(path / "tabdiff_work")
+        adapter._save_dir = work_dir
+        adapter._data_dir = os.path.join(work_dir, "data", adapter._dataset_name)
         return adapter
 
     # -------------------------------------------------------------------

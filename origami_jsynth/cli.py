@@ -163,6 +163,7 @@ def cmd_data(args: argparse.Namespace) -> None:
     test_records = load_jsonl(data_dir / "test.jsonl")
 
     # Process combined records so both splits get an identical column schema
+    print(f"Flattening records for {args.dataset}...")
     n_train = len(train_records)
     df, _ = records_to_dataframe(train_records + test_records, tabular=info.tabular)
     train_df = df.iloc[:n_train]
@@ -298,6 +299,350 @@ def cmd_eval(args: argparse.Namespace) -> None:
         )
 
 
+def cmd_overview(args: argparse.Namespace) -> None:
+    """Show evaluation status and results across all datasets and models."""
+    import json
+
+    results_dir = Path(args.output_dir)
+
+    # Fixed order matching generate_latex_tables.py
+    datasets = ["adult", "diabetes", "electric_vehicles", "yelp", "ddxplus", "github_issues"]
+    models = ["tvae", "ctgan", "realtabformer", "mostlyai", "tabdiff", "origami"]
+
+    model_labels = {
+        "origami": "Origami", "ctgan": "CTGAN", "tvae": "TVAE",
+        "realtabformer": "REaLTabFormer",
+        "mostlyai": "TabularARGN", "tabdiff": "TabDiff",
+    }
+    dataset_labels = {
+        "adult": "Adult", "diabetes": "Diabetes", "electric_vehicles": "Elec. Vehicles",
+        "ddxplus": "DDXPlus", "github_issues": "GitHub Issues", "yelp": "Yelp",
+    }
+
+    def load_agg(dataset, model, dcr=False):
+        suffix = f"{dataset}_dcr" if dcr else dataset
+        path = results_dir / suffix / model / "report" / "agg_results.json"
+        if not path.exists():
+            return None
+        with open(path) as f:
+            return json.load(f)
+
+    # Load all results into a nested dict: data[dataset][source][model] -> metrics
+    data = {}
+    for d in datasets:
+        data[d] = {"base": {}, "dcr": {}}
+        for m in models:
+            agg = load_agg(d, m, dcr=False)
+            if agg:
+                data[d]["base"][m] = agg["metrics"]
+            agg = load_agg(d, m, dcr=True)
+            if agg:
+                data[d]["dcr"][m] = agg["metrics"]
+
+    # Models that ran out of memory on certain datasets
+    oom = {
+        ("ctgan", "ddxplus"),
+        ("ctgan", "yelp"),
+        ("ctgan", "electric_vehicles"),
+        ("tvae", "ddxplus"),
+        ("tvae", "yelp"),
+        ("tvae", "electric_vehicles"),
+        ("realtabformer", "ddxplus"),
+    }
+
+    if args.latex:
+        _print_latex_tables(datasets, models, model_labels, dataset_labels, data, oom)
+        return
+
+    # ANSI formatting
+    GREEN = "\033[32m"
+    DARK_RED = "\033[31m"
+    BOLD = "\033[1m"
+    RESET = "\033[0m"
+    OOM_STR = f"{DARK_RED}OOM{RESET}"
+
+    # --- Table 1: Replicate counts ---
+    def count_replicates(report_dir: Path) -> int:
+        if not report_dir.is_dir():
+            return 0
+        return len(list(report_dir.glob("results_*.json")))
+
+    base_counts = {}  # (dataset, model) -> int
+    dcr_counts = {}
+    for d in datasets:
+        for m in models:
+            base_counts[(d, m)] = count_replicates(results_dir / d / m / "report")
+            dcr_counts[(d, m)] = count_replicates(results_dir / f"{d}_dcr" / m / "report")
+
+    ds_col_w = max(len(dataset_labels.get(d, d)) for d in datasets) + 1
+    model_ws = {m: max(len(model_labels.get(m, m)), 3) for m in models}
+
+    def print_count_table(title, counts):
+        print(f"\n{title}")
+        header = "".ljust(ds_col_w) + "  ".join(model_labels.get(m, m).rjust(model_ws[m]) for m in models)
+        print(header)
+        print("-" * len(header))
+        for d in datasets:
+            row = dataset_labels.get(d, d).ljust(ds_col_w)
+            cells = []
+            for m in models:
+                c = counts[(d, m)]
+                if c > 0:
+                    s = str(c)
+                elif (m, d) in oom:
+                    pad = model_ws[m] - 3  # 3 = len("OOM")
+                    cells.append(" " * max(0, pad) + OOM_STR)
+                    continue
+                else:
+                    s = "-"
+                cells.append(s.rjust(model_ws[m]))
+            row += "  ".join(cells)
+            print(row)
+
+    print_count_table("Evaluation replicates (base):", base_counts)
+    print_count_table("Evaluation replicates (DCR):", dcr_counts)
+
+    # --- Table 2: Primary scores ---
+    base_metrics = [("fidelity", "Fidelity"), ("utility", "Utility"), ("detection", "Detection")]
+    dcr_metrics = [("privacy", "Privacy")]
+
+    def fmt(mean, std, highlight=False):
+        s = f"{mean:.3f}±{std:.3f}"
+        if highlight:
+            return f"{GREEN}{BOLD}{s}{RESET}"
+        return s
+
+    def print_results_table(title, metric_defs, source):
+        metric_col_w = max(len(label) for _, label in metric_defs) + 1
+        val_w = max(11, *(len(model_labels.get(m, m)) for m in models))
+
+        print(f"\n{title}")
+        header = "".ljust(ds_col_w) + "".ljust(metric_col_w) + "  ".join(
+            model_labels.get(m, m).rjust(val_w) for m in models
+        )
+        print(header)
+        print("-" * len(header))
+
+        for di, d in enumerate(datasets):
+            if di > 0 and len(metric_defs) > 1:
+                print()
+            for i, (metric_key, metric_label) in enumerate(metric_defs):
+                # Find best mean for this row
+                means = {}
+                for m in models:
+                    model_data = data[d].get(source, {}).get(m)
+                    if model_data and metric_key in model_data:
+                        means[m] = model_data[metric_key]["mean"]
+                best_val = max(means.values()) if means else None
+
+                row = (dataset_labels.get(d, d) if i == 0 else "").ljust(ds_col_w)
+                row += metric_label.ljust(metric_col_w)
+                cells = []
+                for m in models:
+                    model_data = data[d].get(source, {}).get(m)
+                    if model_data and metric_key in model_data:
+                        met = model_data[metric_key]
+                        is_best = met["mean"] == best_val
+                        cell = fmt(met["mean"], met["std"], highlight=is_best)
+                        # ANSI codes are invisible but affect rjust, so pad manually
+                        pad = val_w - 11  # 11 = len("0.000±0.000")
+                        cells.append((" " * max(0, pad)) + cell)
+                    elif (m, d) in oom and i == 0:
+                        pad = val_w - 3  # 3 = len("OOM")
+                        cells.append(" " * max(0, pad) + OOM_STR)
+                    else:
+                        cells.append("-".rjust(val_w))
+                row += "  ".join(cells)
+                print(row)
+
+    print_results_table("Results (base):", base_metrics, source="base")
+    print_results_table("Results (DCR):", dcr_metrics, source="dcr")
+    print()
+
+
+def _print_latex_tables(datasets, models, model_labels, dataset_labels, data, oom):
+    """Print transposed LaTeX tables (models as columns, datasets as rows)."""
+
+    # LaTeX-specific labels (override ASCII labels)
+    latex_dataset_labels = {
+        "adult": "Adult",
+        "diabetes": "Diabetes",
+        "electric_vehicles": "\\shortstack{Electric\\\\Vehicles}",
+        "ddxplus": "DDXPlus",
+        "github_issues": "\\shortstack{GitHub\\\\Issues}",
+        "yelp": "Yelp",
+    }
+    latex_model_labels = {
+        "tvae": "TVAE",
+        "ctgan": "CTGAN",
+        "realtabformer": "REaLTabFormer",
+        "mostlyai": "TabularARGN",
+        "tabdiff": "TabDiff",
+        "origami": "\\origami (ours)",
+    }
+
+    tables = {
+        "fidelity": {
+            "caption": "Fidelity metrics across datasets (mean $\\pm$ std over 10 replicates). Higher is better.",
+            "label": "tab:fidelity",
+            "source": "base",
+            "metrics": [
+                ("fidelity", "Overall score"),
+                ("fidelity_shapes", "Shapes"),
+                ("fidelity_trends", "Trends"),
+            ],
+            "higher_is_better": True,
+        },
+        "utility": {
+            "caption": "Utility metrics across datasets (mean $\\pm$ std over 10 replicates). Higher is better.",
+            "label": "tab:utility",
+            "source": "base",
+            "metrics": [
+                ("utility", "Overall score"),
+                ("utility_trtr_f1_weighted", "TRTR $F_1$"),
+                ("utility_tstr_f1_weighted", "TSTR $F_1$"),
+            ],
+            "higher_is_better": True,
+        },
+        "detection": {
+            "caption": "Detection metrics across datasets (mean $\\pm$ std over 10 replicates). "
+            "Detection score: higher means harder to detect (better). "
+            "XGBoost classifier ROC AUC: lower means harder to distinguish from real data (better).",
+            "label": "tab:detection",
+            "source": "base",
+            "metrics": [
+                ("detection", "Overall score $\\uparrow$"),
+                ("detection_roc_auc", "ROC AUC $\\downarrow$"),
+            ],
+            "higher_is_better": {
+                "detection": True,
+                "detection_roc_auc": False,
+            },
+        },
+        "privacy": {
+            "caption": "Privacy metrics across datasets (mean $\\pm$ std over 10 replicates, "
+            "3 replicates for DDXPlus). "
+            "Privacy score: higher is better. "
+            "DCR score $\\leq$ 50 indicates no memorization.",
+            "label": "tab:privacy",
+            "source": "dcr",
+            "metrics": [
+                ("privacy", "Overall score $\\uparrow$"),
+                ("privacy_dcr_score", "DCR $\\downarrow$"),
+                ("privacy_exact_matches_train", "Exact match $\\downarrow$"),
+            ],
+            "higher_is_better": {
+                "privacy": True,
+                "privacy_dcr_score": None,
+                "privacy_exact_matches_train": False,
+            },
+        },
+    }
+
+    def fmt_val(mean, std, is_count=False, bold=False):
+        if is_count:
+            mean_str, std_str = f"{mean:.1f}", f"{std:.1f}"
+        else:
+            mean_str, std_str = f"{mean:.3f}", f"{std:.3f}"
+        if bold:
+            return (
+                f"$\\underline{{\\mathbf{{{mean_str}}}}}"
+                f"{{\\color{{gray}}\\scriptstyle\\,\\pm\\,{std_str}}}$"
+            )
+        return f"${mean_str}{{\\color{{gray}}\\scriptstyle\\,\\pm\\,{std_str}}}$"
+
+    def find_best(table_cfg, metric_key):
+        source = table_cfg["source"]
+        hib = table_cfg["higher_is_better"]
+        direction = hib.get(metric_key) if isinstance(hib, dict) else hib
+        if direction is None:
+            return {}
+        best = {}
+        for ds in datasets:
+            best_val, best_models = None, []
+            for model in models:
+                model_data = data[ds].get(source, {}).get(model)
+                if model_data is None or metric_key not in model_data:
+                    continue
+                val = model_data[metric_key]["mean"]
+                if best_val is None or (direction and val > best_val) or (not direction and val < best_val):
+                    best_val, best_models = val, [model]
+                elif val == best_val:
+                    best_models.append(model)
+            for m in best_models:
+                best[(ds, m)] = True
+        return best
+
+    print("% Auto-generated results tables (models as columns, datasets as rows)")
+    print("% Requires: \\usepackage{booktabs, multirow, xcolor}")
+    print()
+
+    for table_name, table_cfg in tables.items():
+        source = table_cfg["source"]
+        metrics = table_cfg["metrics"]
+
+        available_models = [m for m in models if any(m in data[ds].get(source, {}) for ds in datasets)]
+        if not available_models:
+            continue
+
+        col_spec = "ll" + "c" * len(available_models)
+
+        best_per_metric = {mk: find_best(table_cfg, mk) for mk, _ in metrics}
+
+        lines = []
+        lines.append("\\begin{table*}[t]")
+        lines.append(f"  \\caption{{{table_cfg['caption']}}}")
+        lines.append(f"  \\label{{{table_cfg['label']}}}")
+        lines.append("  \\small")
+        lines.append(f"  \\begin{{tabular}}{{{col_spec}}}")
+        lines.append("    \\toprule")
+
+        header_cols = ["", ""] + [latex_model_labels[m] for m in available_models]
+        lines.append("    " + " & ".join(header_cols) + " \\\\")
+        lines.append("    \\midrule")
+
+        for i, ds in enumerate(datasets):
+            ds_label = latex_dataset_labels[ds]
+            num_metrics = len(metrics)
+
+            for j, (metric_key, metric_label) in enumerate(metrics):
+                is_primary = j == 0
+                row_parts = []
+                if j == 0:
+                    row_parts.append(f"\\multirow{{{num_metrics}}}{{*}}{{{ds_label}}}")
+                else:
+                    row_parts.append("")
+
+                row_parts.append(f"  {metric_label}" if is_primary else f"  \\quad {metric_label}")
+
+                for model in available_models:
+                    is_oom = (model, ds) in oom
+                    model_data = data[ds].get(source, {}).get(model)
+                    if model_data is None or metric_key not in model_data:
+                        row_parts.append("OOM" if is_oom and is_primary else "--")
+                    else:
+                        mean_val = model_data[metric_key]["mean"]
+                        std_val = model_data[metric_key]["std"]
+                        is_count = metric_key.startswith("privacy_exact_matches")
+                        is_best = is_primary and best_per_metric[metric_key].get(
+                            (ds, model), False
+                        )
+                        row_parts.append(fmt_val(mean_val, std_val, is_count=is_count, bold=is_best))
+
+                lines.append("    " + " & ".join(row_parts) + " \\\\")
+
+            if i < len(datasets) - 1:
+                lines.append("    \\addlinespace")
+
+        lines.append("    \\bottomrule")
+        lines.append("  \\end{tabular}")
+        lines.append("\\end{table*}")
+
+        print(f"% === {table_name.upper()} ===")
+        print("\n".join(lines))
+        print()
+
+
 def cmd_all(args: argparse.Namespace) -> None:
     """Run the full pipeline: data -> train -> sample -> eval."""
     with _sync_context(args):
@@ -386,6 +731,12 @@ def main() -> None:
     p_eval = subparsers.add_parser("eval", help="Evaluate synthetic data")
     add_common_args(p_eval)
     p_eval.set_defaults(func=cmd_eval)
+
+    # results
+    p_results = subparsers.add_parser("results", help="Show evaluation status and results overview")
+    p_results.add_argument("--output-dir", default="./results", help="Base output directory")
+    p_results.add_argument("--latex", action="store_true", help="Output LaTeX tables instead of ASCII")
+    p_results.set_defaults(func=cmd_overview)
 
     # all
     p_all = subparsers.add_parser("all", help="Run full pipeline: data -> train -> sample -> eval")

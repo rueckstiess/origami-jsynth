@@ -130,11 +130,12 @@ The Yelp dataset cannot be redistributed due to the [Yelp Dataset Terms of Use](
 origami-jsynth <command> --dataset <name> [--output-dir ./results] [--dcr]
 
 Commands:
-  data     Download and prepare dataset splits
-  train    Train a model (Origami or baseline)
-  sample   Generate synthetic data from a trained model
-  eval     Evaluate synthetic data quality
-  all      Run the full pipeline (data -> train -> sample -> eval)
+  data      Download and prepare dataset splits
+  train     Train a model (Origami or baseline)
+  sample    Generate synthetic data from a trained model
+  eval      Evaluate synthetic data quality
+  results   Show evaluation status and results across all datasets/models
+  all       Run the full pipeline (data -> train -> sample -> eval)
 
 Options:
   --dataset       Dataset name (adult, diabetes, electric_vehicles, ddxplus, yelp)
