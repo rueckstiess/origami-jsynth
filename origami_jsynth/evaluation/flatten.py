@@ -167,6 +167,18 @@ def _unflatten_leaf_only(flat: dict, sep: str = ".") -> dict:
     """Original unflatten logic for leaf-only flattened data."""
     result: dict = {}
 
+    # Pre-scan: find paths that are array parents (have a numeric segment as direct child).
+    # Sorted shallower-first so intermediate nodes are created before deeper ones.
+    array_parent_paths: list[str] = sorted(
+        {
+            sep.join(key.split(sep)[:i])
+            for key in flat
+            for i, part in enumerate(key.split(sep))
+            if part.isdigit() and i > 0
+        },
+        key=lambda p: p.count(sep),
+    )
+
     for key, value in flat.items():
         # Skip NaN values (common from pandas DataFrames with variable-length lists)
         if _is_nan(value):
@@ -183,6 +195,22 @@ def _unflatten_leaf_only(flat: dict, sep: str = ".") -> dict:
 
         # Set the final value
         current[parts[-1]] = value
+
+    # Ensure every array parent exists. If all children were NaN (e.g. an empty
+    # array encoded as all-missing slots), the parent would be absent; set it to []
+    # so the field is present in the output rather than silently dropped.
+    # Only create the [] if the immediate parent dict already exists (avoids
+    # sprouting empty objects for wholly-absent nested structures).
+    for path in array_parent_paths:
+        parts = path.split(sep)
+        current = result
+        for part in parts[:-1]:
+            if part not in current:
+                current = None
+                break
+            current = current[part]
+        if current is not None and parts[-1] not in current:
+            current[parts[-1]] = []
 
     # Post-process: convert dict with numeric keys to lists where appropriate
     return _convert_numeric_dicts_to_lists(result)
