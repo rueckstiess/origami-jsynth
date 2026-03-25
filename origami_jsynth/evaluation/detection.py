@@ -33,6 +33,16 @@ class DetectionResult:
     method: str = "xgboost"
     feature_importances: dict[str, float] = dataclass_field(default_factory=dict)
 
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "DetectionResult":
+        """Reconstruct from a dictionary produced by to_dict()."""
+        return cls(
+            detection_score=d["detection_score"],
+            roc_auc=d["roc_auc"],
+            method=d.get("method", "xgboost"),
+            feature_importances=d.get("feature_importances", {}),
+        )
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {

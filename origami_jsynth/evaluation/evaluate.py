@@ -39,6 +39,20 @@ class EvaluationResult:
     privacy_result: PrivacyResult | None = None
     detection_result: DetectionResult | None = None
 
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "EvaluationResult":
+        """Reconstruct from a dictionary produced by to_dict()."""
+        details = d.get("details", {})
+        return cls(
+            metrics=d["metrics"],
+            details=details,
+            config=d.get("config", {}),
+            fidelity_result=FidelityResult.from_dict(details["fidelity"]) if "fidelity" in details else None,
+            utility_result=UtilityResult.from_dict(details["utility"]) if "utility" in details else None,
+            privacy_result=PrivacyResult.from_dict(details["privacy"]) if "privacy" in details else None,
+            detection_result=DetectionResult.from_dict(details["detection"]) if "detection" in details else None,
+        )
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {

@@ -48,6 +48,21 @@ class FidelityResult:
     pair_details: dict[str, dict[str, Any]] = dataclass_field(default_factory=dict)
     pair_weights: dict[str, float] = dataclass_field(default_factory=dict)
 
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "FidelityResult":
+        """Reconstruct from a dictionary produced by to_dict()."""
+        return cls(
+            overall_score=d["overall_score"],
+            column_shapes_score=d["column_shapes_score"],
+            column_pair_trends_score=d["column_pair_trends_score"],
+            field_scores=d["field_scores"],
+            field_details=d["field_details"],
+            field_weights=d.get("field_weights", {}),
+            pair_scores=d.get("pair_scores", {}),
+            pair_details=d.get("pair_details", {}),
+            pair_weights=d.get("pair_weights", {}),
+        )
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {

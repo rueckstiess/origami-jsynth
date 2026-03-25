@@ -42,6 +42,17 @@ class UtilityResult:
     tstr_metrics: dict[str, float]
     utility_score: float
 
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "UtilityResult":
+        """Reconstruct from a dictionary produced by to_dict()."""
+        return cls(
+            task_type=d["task_type"],
+            target_column=d["target_column"],
+            trtr_metrics=d["trtr_metrics"],
+            tstr_metrics=d["tstr_metrics"],
+            utility_score=d["utility_score"],
+        )
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
