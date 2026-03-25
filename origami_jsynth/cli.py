@@ -349,6 +349,8 @@ def cmd_overview(args: argparse.Namespace) -> None:
         ("ctgan", "ddxplus"),
         ("ctgan", "yelp"),
         ("ctgan", "electric_vehicles"),
+        ("ctgan", "github_issues"),
+        ("tvae", "github_issues"),
         ("tvae", "ddxplus"),
         ("tvae", "yelp"),
         ("tvae", "electric_vehicles"),
@@ -408,9 +410,6 @@ def cmd_overview(args: argparse.Namespace) -> None:
     print_count_table("Evaluation replicates (DCR):", dcr_counts)
 
     # --- Table 2: Primary scores ---
-    base_metrics = [("fidelity", "Fidelity"), ("utility", "Utility"), ("detection", "Detection")]
-    dcr_metrics = [("privacy", "Privacy")]
-
     def fmt(mean, std, highlight=False):
         s = f"{mean:.3f}±{std:.3f}"
         if highlight:
@@ -421,7 +420,8 @@ def cmd_overview(args: argparse.Namespace) -> None:
         metric_col_w = max(len(label) for _, label in metric_defs) + 1
         val_w = max(11, *(len(model_labels.get(m, m)) for m in models))
 
-        print(f"\n{title}")
+        CYAN = "\033[36m"
+        print(f"\n\n{CYAN}{BOLD}{title}{RESET}")
         header = "".ljust(ds_col_w) + "".ljust(metric_col_w) + "  ".join(
             model_labels.get(m, m).rjust(val_w) for m in models
         )
@@ -460,8 +460,10 @@ def cmd_overview(args: argparse.Namespace) -> None:
                 row += "  ".join(cells)
                 print(row)
 
-    print_results_table("Results (base):", base_metrics, source="base")
-    print_results_table("Results (DCR):", dcr_metrics, source="dcr")
+    print_results_table("Fidelity:", [("fidelity", "Fidelity")], source="base")
+    print_results_table("Utility:", [("utility", "Utility")], source="base")
+    print_results_table("Detection:", [("detection", "Detection")], source="base")
+    print_results_table("Privacy:", [("privacy", "Privacy")], source="dcr")
     print()
 
 
