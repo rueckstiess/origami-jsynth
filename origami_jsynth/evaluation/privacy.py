@@ -11,7 +11,7 @@ Reference: https://github.com/amazon-science/tabsyn/blob/main/eval/eval_dcr.py
 
 import hashlib
 import json
-from concurrent.futures import ThreadPoolExecutor
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -43,6 +43,18 @@ class PrivacyResult:
     exact_matches_test: int
     exact_matches_train_only: int
     ref_size: int  # size of each reference set used
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "PrivacyResult":
+        """Reconstruct from a dictionary produced by to_dict()."""
+        return cls(
+            privacy_score=d["privacy_score"],
+            dcr_score=d["dcr_score"],
+            exact_matches_train=d["exact_matches_train"],
+            exact_matches_test=d["exact_matches_test"],
+            exact_matches_train_only=d["exact_matches_train_only"],
+            ref_size=d["ref_size"],
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -84,6 +96,8 @@ def _compute_dcr_l2_batched(
     ref_sq = np.sum(reference**2, axis=1)  # (M,)
 
     n_batches = (n_query + batch_size - 1) // batch_size
+    t0 = time.monotonic()
+    last_report = t0
 
     for idx, i in enumerate(range(0, n_query, batch_size)):
         batch = query[i : i + batch_size]
@@ -92,8 +106,14 @@ def _compute_dcr_l2_batched(
         np.maximum(sq_distances, 0.0, out=sq_distances)
         dcr[i : i + batch_size] = np.sqrt(sq_distances.min(axis=1))
 
-        if desc and ((idx + 1) % max(1, n_batches // 5) == 0 or idx + 1 == n_batches):
-            print(f"  {desc}: {idx + 1}/{n_batches} batches done")
+        now = time.monotonic()
+        if desc and (now - last_report >= 30 or idx + 1 == n_batches):
+            elapsed = now - t0
+            pct = 100 * (idx + 1) / n_batches
+            rate = (idx + 1) * batch_size / elapsed if elapsed > 0 else 0
+            eta = (n_batches - idx - 1) * (elapsed / (idx + 1)) if idx > 0 else 0
+            print(f"  {desc}: {idx + 1}/{n_batches} ({pct:.0f}%) {elapsed:.1f}s [{rate:.0f} rows/s] ETA {eta:.0f}s")
+            last_report = now
 
     return dcr
 
@@ -103,10 +123,10 @@ def compute_privacy(
     test_records: list[dict],
     synthetic_records: list[dict],
     *,
-    n_components: int = 30000,
+    n_components: int = 40000,
     batch_size: int = 100,
     max_synth_samples: int | None = None,
-    max_workers: int | None = None,
+    max_workers: int | None = 1,
     random_state: int = 42,
     verbose: bool = True,
 ) -> PrivacyResult:
@@ -124,7 +144,7 @@ def compute_privacy(
         train_records: Training data records (sensitive)
         test_records: Held-out test data records
         synthetic_records: Generated synthetic data records
-        n_components: Number of dimensions after projection. Default 500
+        n_components: Number of dimensions after projection. Default 40000
             gives ~10% distance distortion for typical dataset sizes.
         batch_size: Batch size for distance computation
         max_synth_samples: Maximum synthetic samples to evaluate. None = use all.
@@ -156,6 +176,7 @@ def compute_privacy(
     def _record_hash(record: dict) -> str:
         return hashlib.sha256(json.dumps(record, sort_keys=True, default=str).encode()).hexdigest()
 
+    t0 = time.monotonic()
     train_hashes = {_record_hash(r) for r in train_records}
     test_hashes = {_record_hash(r) for r in test_records}
     synth_hash_list = [_record_hash(r) for r in synthetic_records]
@@ -166,12 +187,14 @@ def compute_privacy(
         1 for h in synth_hash_list if h in train_hashes and h not in test_hashes
     )
 
-    if verbose and (exact_matches_train > 0 or exact_matches_test > 0):
-        print(
-            f"  Exact matches: {exact_matches_train} train, "
-            f"{exact_matches_test} test, "
-            f"{exact_matches_train_only} train-only"
-        )
+    if verbose:
+        print(f"  Exact match hashing: {time.monotonic() - t0:.1f}s")
+        if exact_matches_train > 0 or exact_matches_test > 0:
+            print(
+                f"  Exact matches: {exact_matches_train} train, "
+                f"{exact_matches_test} test, "
+                f"{exact_matches_train_only} train-only"
+            )
 
     # Subsample train to match test size for unbiased comparison
     n_train_orig = len(train_records)
@@ -183,14 +206,21 @@ def compute_privacy(
         print(f"  Train: {n_train_orig} → subsampled to {len(train_records)}")
 
     # Flatten and type-separate all three groups together
+    t0 = time.monotonic()
     df, masks = prepare_union_table(train=train_records, test=test_records, synth=synthetic_records)
     train_mask, test_mask, synth_mask = masks["train"], masks["test"], masks["synth"]
+    if verbose:
+        print(f"  Union table: {len(df)} rows x {len(df.columns)} cols ({time.monotonic() - t0:.1f}s)")
 
     # Encode type-separated columns into numeric features
+    t0 = time.monotonic()
     encoded = encode_features(df, exclude_columns=["__split__"])
+    if verbose:
+        print(f"  Encoding: {len(encoded.columns)} features ({time.monotonic() - t0:.1f}s)")
 
     # Normalize continuous columns by training range.
     # One-hot (.cat/.dtype) and boolean (.bool) columns are already 0/1.
+    t0 = time.monotonic()
     num_suffixes = (".num", ".alen", ".date")
     for col in encoded.columns:
         if any(col.endswith(s) for s in num_suffixes):
@@ -201,15 +231,14 @@ def compute_privacy(
 
     # Fill NaN with 0 (absent fields contribute nothing to distance)
     encoded = encoded.fillna(0.0)
+    if verbose:
+        print(f"  Normalization + fillna: {time.monotonic() - t0:.1f}s")
 
-    # Split into arrays by group
-    train_arr = encoded.loc[train_mask].to_numpy(dtype=np.float64)
-    test_arr = encoded.loc[test_mask].to_numpy(dtype=np.float64)
-    synth_arr = encoded.loc[synth_mask].to_numpy(dtype=np.float64)
-
-    # Apply random projection (JL dimensionality reduction)
-    # Skip projection if n_components >= input dimensionality (no reduction needed)
-    n_features = train_arr.shape[1]
+    # Extract arrays one at a time to minimize peak memory.
+    # With float32, each 580K × 21K array is ~49 GB. The encoded DataFrame
+    # is ~50 GB. We extract each split, free the DataFrame as soon as
+    # possible, and only hold synth + one reference array during DCR.
+    n_features = len(encoded.columns)
     if verbose:
         if n_components < n_features:
             print(f"  Features: {n_features} → projected to {n_components}")
@@ -218,54 +247,55 @@ def compute_privacy(
                 f"  Features: {n_features}"
                 f" (no projection, n_components={n_components} >= n_features)"
             )
-    if n_components < n_features:
-        projector = SparseRandomProjection(n_components=n_components, random_state=random_state)
-        train_proj = projector.fit_transform(train_arr)
-        test_proj = projector.transform(test_arr)
-        synth_proj = projector.transform(synth_arr)
-    else:
-        train_proj, test_proj, synth_proj = train_arr, test_arr, synth_arr
 
-    # Compute L2 DCR in projected space.
-    # The two DCR calls (synth→train, synth→test) are independent, so we run
-    # them concurrently using threads. numpy matmul releases the GIL, giving
-    # ~1.4x speedup. (ProcessPoolExecutor with fork crashes here because
-    # BLAS thread state is not fork-safe on macOS.)
-    if max_workers != 1:
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            future_train = pool.submit(
-                _compute_dcr_l2_batched,
-                synth_proj,
-                train_proj,
-                batch_size,
-                desc="DCR synth→train",
-            )
-            future_test = pool.submit(
-                _compute_dcr_l2_batched,
-                synth_proj,
-                test_proj,
-                batch_size,
-                desc="DCR synth→test",
-            )
-            dcr_to_train = future_train.result()
-            dcr_to_test = future_test.result()
-    else:
-        dcr_to_train = _compute_dcr_l2_batched(
-            synth_proj,
-            train_proj,
-            batch_size,
-            desc="DCR synth→train",
-        )
-        dcr_to_test = _compute_dcr_l2_batched(
-            synth_proj,
-            test_proj,
-            batch_size,
-            desc="DCR synth→test",
-        )
+    projector = None
+    if n_components < n_features:
+        t0 = time.monotonic()
+        projector = SparseRandomProjection(n_components=n_components, random_state=random_state)
+        train_fit = encoded.loc[train_mask].to_numpy(dtype=np.float32)
+        projector.fit(train_fit)
+        del train_fit
+        if verbose:
+            print(f"  Projection fit: {time.monotonic() - t0:.1f}s")
+
+    # Extract synth array (held throughout both DCR passes)
+    t0 = time.monotonic()
+    synth_arr = encoded.loc[synth_mask].to_numpy(dtype=np.float32)
+    if projector:
+        synth_arr = projector.transform(synth_arr)
+    if verbose:
+        print(f"  Synth array: {synth_arr.shape} ({time.monotonic() - t0:.1f}s)")
+
+    # --- DCR pass 1: synth → train ---
+    t0 = time.monotonic()
+    train_arr = encoded.loc[train_mask].to_numpy(dtype=np.float32)
+    if projector:
+        train_arr = projector.transform(train_arr)
+    if verbose:
+        print(f"  Train array: {train_arr.shape} ({time.monotonic() - t0:.1f}s)")
+
+    # Extract test array now so we can free the DataFrame before DCR
+    t0_test = time.monotonic()
+    test_arr = encoded.loc[test_mask].to_numpy(dtype=np.float32)
+    if projector:
+        test_arr = projector.transform(test_arr)
+    if verbose:
+        print(f"  Test array: {test_arr.shape} ({time.monotonic() - t0_test:.1f}s)")
+    del encoded
+
+    dcr_to_train = _compute_dcr_l2_batched(
+        synth_arr, train_arr, batch_size, desc="DCR synth→train",
+    )
+    del train_arr
+
+    dcr_to_test = _compute_dcr_l2_batched(
+        synth_arr, test_arr, batch_size, desc="DCR synth→test",
+    )
+    del test_arr, synth_arr
 
     # Score computation
     closer_to_train = np.sum(dcr_to_train < dcr_to_test)
-    total = len(synth_proj)
+    total = len(dcr_to_train)
 
     dcr_score = (closer_to_train / total) * 100
     # Only penalize dcr_score > 50 (closer to train = memorization risk).
