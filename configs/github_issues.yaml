@@ -29,6 +29,7 @@ training:
   learning_rate: 0.0005
   lr_cosine_exponent: 2.0
   lr_scheduler: cosine
+  lr_min: 5e-6
   num_epochs: 100
   shuffle_keys: true
   target_loss_weight: 1.0

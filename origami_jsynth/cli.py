@@ -355,6 +355,7 @@ def cmd_overview(args: argparse.Namespace) -> None:
         ("tvae", "yelp"),
         ("tvae", "electric_vehicles"),
         ("realtabformer", "ddxplus"),
+        ("realtabformer", "github_issues")
     }
 
     if args.latex:

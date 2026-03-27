@@ -155,7 +155,7 @@ def sample_dataset(
         train_records = load_jsonl(data_dir / "train.jsonl")
         n_train = len(train_records)
 
-    generate_kwargs: dict[str, Any] = {}
+    generate_kwargs: dict[str, Any] = {"max_length": 2048}
     if not tabular:
         generate_kwargs["allow_complex_values"] = True
     generate_kwargs.update(sample_kwargs)

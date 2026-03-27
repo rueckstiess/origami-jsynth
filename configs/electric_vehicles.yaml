@@ -16,7 +16,7 @@ model:
   n_layers: 8
   num_mixture_components: 5
 training:
-  batch_size: 64
+  batch_size: 128
   constrain_grammar: true
   constrain_schema: true
   dataloader_num_workers: 0
@@ -24,11 +24,12 @@ training:
   eval_epochs: 5
   eval_sample_size: 500
   eval_strategy: epoch
-  learning_rate: 0.0005
-  num_epochs: 300
+  num_epochs: 500
   shuffle_keys: true
   target_loss_weight: 1.0
   warmup_steps: 1000
+  learning_rate: 0.0005
+  lr_min: 5e-6
   lr_scheduler: cosine
   lr_cosine_exponent: 2.0
 inference:

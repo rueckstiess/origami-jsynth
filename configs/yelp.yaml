@@ -31,6 +31,7 @@ training:
   warmup_steps: 1000
   lr_scheduler: cosine
   lr_cosine_exponent: 2.0
+  lr_min: 5e-6
 inference:
   constrain_grammar: true
   constrain_schema: true
