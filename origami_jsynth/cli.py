@@ -362,6 +362,10 @@ def cmd_overview(args: argparse.Namespace) -> None:
         _print_latex_tables(datasets, models, model_labels, dataset_labels, data, oom)
         return
 
+    if args.markdown:
+        _print_markdown_tables(datasets, models, model_labels, dataset_labels, data, oom)
+        return
+
     # ANSI formatting
     GREEN = "\033[32m"
     DARK_RED = "\033[31m"
@@ -465,6 +469,52 @@ def cmd_overview(args: argparse.Namespace) -> None:
     print_results_table("Utility:", [("utility", "Utility")], source="base")
     print_results_table("Detection:", [("detection", "Detection")], source="base")
     print_results_table("Privacy:", [("privacy", "Privacy")], source="dcr")
+    print()
+
+
+def _print_markdown_tables(datasets, models, model_labels, dataset_labels, data, oom):
+    """Print primary metric scores as GitHub-flavored Markdown tables."""
+    OOM = "❌"
+    metric_tables = [
+        ("Fidelity", "fidelity", "base"),
+        ("Utility", "utility", "base"),
+        ("Detection", "detection", "base"),
+        ("Privacy", "privacy", "dcr"),
+    ]
+
+    available_models = [m for m in models if any(
+        data[d].get(src, {}).get(m) for d in datasets
+        for src in ("base", "dcr")
+    )]
+
+    for title, metric_key, source in metric_tables:
+        print(f"\n### {title}\n")
+        header = "| Dataset | " + " | ".join(model_labels[m] for m in available_models) + " |"
+        sep = "| --- | " + " | ".join("---" for _ in available_models) + " |"
+        print(header)
+        print(sep)
+        for d in datasets:
+            means = {}
+            for m in available_models:
+                model_data = data[d].get(source, {}).get(m)
+                if model_data and metric_key in model_data:
+                    means[m] = model_data[metric_key]["mean"]
+            best_val = max(means.values()) if means else None
+
+            cells = []
+            for m in available_models:
+                model_data = data[d].get(source, {}).get(m)
+                if model_data and metric_key in model_data:
+                    met = model_data[metric_key]
+                    s = f"{met['mean']:.3f}"
+                    if met["mean"] == best_val:
+                        s = f"**{s}**"
+                    cells.append(s)
+                elif (m, d) in oom:
+                    cells.append(OOM)
+                else:
+                    cells.append("-")
+            print(f"| {dataset_labels.get(d, d)} | " + " | ".join(cells) + " |")
     print()
 
 
@@ -744,6 +794,7 @@ def main() -> None:
     p_results = subparsers.add_parser("results", help="Show evaluation status and results overview")
     p_results.add_argument("--output-dir", default="./results", help="Base output directory")
     p_results.add_argument("--latex", action="store_true", help="Output LaTeX tables instead of ASCII")
+    p_results.add_argument("--markdown", action="store_true", help="Output Markdown tables instead of ASCII")
     p_results.set_defaults(func=cmd_overview)
 
     # all

@@ -1,5 +1,5 @@
 data:
-  cat_threshold: 128
+  cat_threshold: 3000
   infer_schema: true
   max_vocab_size: 0
   model_array_lengths: false
@@ -9,7 +9,7 @@ model:
   backbone: cached_transformer
   continuous_loss_weight: -1
   d_ff: 512
-  d_model: 64
+  d_model: 128
   dropout: 0.0
   kvpe_pooling: sum
   n_heads: 4
@@ -21,15 +21,15 @@ training:
   constrain_schema: true
   dataloader_num_workers: 0
   mixed_precision: "no"
-  eval_epochs: 5
-  eval_sample_size: 500
+  eval_epochs: 1
+  eval_sample_size: 1000
   eval_strategy: epoch
-  num_epochs: 500
+  num_epochs: 100
   shuffle_keys: true
   target_loss_weight: 1.0
   warmup_steps: 1000
   learning_rate: 0.0005
-  lr_min: 5e-6
+  lr_min: 0.000005
   lr_scheduler: cosine
   lr_cosine_exponent: 2.0
 inference:

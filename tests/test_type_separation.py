@@ -221,6 +221,30 @@ class TestMergeTypes:
         # Original None.
         assert merged["a"][2] is None
 
+    def test_float_bool_zero_one_restored_as_bool(self):
+        # Regression: synthesizers may output float64 values (0.0/1.0) in .bool
+        # columns. merge_types must convert these back to actual Python bools.
+        df = pd.DataFrame({"v": [True, False, True]})
+        result = separate_types(df, force=True)
+        # Simulate synthesizer output: cast the .bool column to float64.
+        result.df = result.df.copy()
+        result.df["v.bool"] = result.df["v.bool"].astype("float64")
+        merged = merge_types(result.df, result.column_map)
+        for val in merged["v"].dropna():
+            assert isinstance(val, bool), f"Expected bool, got {type(val)}: {val!r}"
+
+    def test_mixed_null_and_bool_roundtrip(self):
+        # None mixed with bools: None should come back as None, bools as bools.
+        df = pd.DataFrame({"v": [True, None, False]})
+        result = separate_types(df, force=True)
+        merged = merge_types(result.df, result.column_map)
+        assert merged["v"][0] is True or merged["v"][0] == True  # noqa: E712
+        assert merged["v"][1] is None
+        assert merged["v"][2] is False or merged["v"][2] == False  # noqa: E712
+        # Non-null values must be actual bools, not floats or strings.
+        assert isinstance(merged["v"][0], bool)
+        assert isinstance(merged["v"][2], bool)
+
 
 # ---------------------------------------------------------------------------
 # TestSeparateMergeRoundtrip — parametrized
@@ -236,6 +260,8 @@ class TestSeparateMergeRoundtrip:
             pytest.param([{"v": None}, {"v": 1}, {"v": "x"}], id="with_none"),
             pytest.param([{"v": 42}, {"v": "text"}, {"v": True}], id="mixed_types"),
             pytest.param([{"b": True}, {"b": False}, {"b": True}], id="booleans"),
+            pytest.param([{"b": True}, {"b": None}, {"b": False}], id="bool_with_null"),
+            pytest.param([{"v": None}, {"v": None}, {"v": None}], id="all_null"),
         ],
     )
     def test_roundtrip(self, records):
@@ -255,3 +281,166 @@ class TestSeparateMergeRoundtrip:
                     assert orig == restored, (
                         f"Row {i} col {col}: expected {orig!r}, got {restored!r}"
                     )
+
+
+# ---------------------------------------------------------------------------
+# TestEachTypeDense — one column per type, fully populated (no missing values)
+# ---------------------------------------------------------------------------
+
+
+class TestEachTypeDense:
+    """Roundtrip tests for each supported type with fully-populated columns."""
+
+    def test_num_int_dense(self):
+        df = pd.DataFrame({"v": [1, 2, 3, 42]})
+        result = separate_types(df, force=True)
+        merged = merge_types(result.df, result.column_map)
+        assert list(merged["v"]) == [1, 2, 3, 42]
+
+    def test_num_float_dense(self):
+        df = pd.DataFrame({"v": [1.5, 2.7, 0.0, -3.14]})
+        result = separate_types(df, force=True)
+        merged = merge_types(result.df, result.column_map)
+        for orig, restored in zip([1.5, 2.7, 0.0, -3.14], merged["v"]):
+            assert abs(orig - restored) < 1e-9
+
+    def test_cat_dense(self):
+        df = pd.DataFrame({"v": ["alpha", "beta", "alpha", "gamma"]})
+        result = separate_types(df, force=True)
+        merged = merge_types(result.df, result.column_map)
+        assert list(merged["v"]) == ["alpha", "beta", "alpha", "gamma"]
+
+    def test_bool_dense(self):
+        df = pd.DataFrame({"v": [True, False, True, False]})
+        result = separate_types(df, force=True)
+        merged = merge_types(result.df, result.column_map)
+        for val in merged["v"]:
+            assert isinstance(val, bool)
+        assert list(merged["v"]) == [True, False, True, False]
+
+    def test_bool_dense_float_synthesizer_output(self):
+        # Regression: synthesizer returns float64 in the .bool column.
+        df = pd.DataFrame({"v": [True, False, True, False]})
+        result = separate_types(df, force=True)
+        result.df = result.df.copy()
+        result.df["v.bool"] = result.df["v.bool"].astype("float64")
+        merged = merge_types(result.df, result.column_map)
+        for val in merged["v"].dropna():
+            assert isinstance(val, bool), f"Expected bool, got {type(val)}: {val!r}"
+        assert list(merged["v"]) == [True, False, True, False]
+
+    def test_bool_dense_string_synthesizer_output(self):
+        # Regression: synthesizer returns "True"/"False" strings in the .bool column.
+        df = pd.DataFrame({"v": [True, False, True, False]})
+        result = separate_types(df, force=True)
+        result.df = result.df.copy()
+        result.df["v.bool"] = result.df["v.bool"].astype(object).map(str)
+        merged = merge_types(result.df, result.column_map)
+        for val in merged["v"].dropna():
+            assert isinstance(val, bool), f"Expected bool, got {type(val)}: {val!r}"
+
+    def test_null_dense(self):
+        # Column where every value is None.
+        df = pd.DataFrame({"v": [None, None, None]})
+        result = separate_types(df, force=True)
+        merged = merge_types(result.df, result.column_map)
+        for val in merged["v"]:
+            assert val is None, f"Expected None, got {val!r}"
+
+    def test_date_dense(self):
+        df = pd.DataFrame({"v": ["2024-01-15", "2023-06-01", "2025-12-31"]})
+        result = separate_types(df, force=True)
+        merged = merge_types(result.df, result.column_map)
+        # Date strings are parsed and re-serialized as ISO format strings.
+        for val in merged["v"].dropna():
+            assert isinstance(val, str) and len(val) >= 10
+
+
+# ---------------------------------------------------------------------------
+# TestEachTypeWithMissing — one column per type, with some missing values
+# ---------------------------------------------------------------------------
+
+
+class TestEachTypeWithMissing:
+    """Roundtrip tests for each supported type with some missing (NaN) values."""
+
+    def _check_non_missing(self, orig_vals, merged_col):
+        """Assert that non-missing original values survive the roundtrip."""
+        for i, (orig, restored) in enumerate(zip(orig_vals, merged_col)):
+            if orig is None or (isinstance(orig, float) and orig != orig):
+                continue  # null/missing — don't assert exact value
+            assert orig == restored, f"Row {i}: expected {orig!r}, got {restored!r}"
+
+    def test_num_with_missing(self):
+        vals = [1, float("nan"), 3, float("nan"), 5]
+        df = pd.DataFrame({"v": vals})
+        result = separate_types(df, force=True)
+        merged = merge_types(result.df, result.column_map)
+        assert merged["v"][0] == 1
+        assert pd.isna(merged["v"][1])
+        assert merged["v"][2] == 3
+
+    def test_cat_with_missing(self):
+        vals = ["alpha", float("nan"), "beta", float("nan")]
+        df = pd.DataFrame({"v": vals})
+        result = separate_types(df, force=True)
+        merged = merge_types(result.df, result.column_map)
+        assert merged["v"][0] == "alpha"
+        assert merged["v"][2] == "beta"
+        # Missing values come back as None or NaN, never as the string "nan".
+        for i in [1, 3]:
+            assert merged["v"][i] != "nan", f"Row {i} should not be 'nan' string"
+
+    def test_bool_with_missing(self):
+        # When a bool column has NaN (absent field), the column becomes mixed-type.
+        df = pd.DataFrame({"v": [True, float("nan"), False, float("nan")]})
+        result = separate_types(df, force=True)
+        merged = merge_types(result.df, result.column_map)
+        assert isinstance(merged["v"][0], bool)
+        assert merged["v"][0] is True
+        assert isinstance(merged["v"][2], bool)
+        assert merged["v"][2] is False
+        assert pd.isna(merged["v"][1])
+        assert pd.isna(merged["v"][3])
+
+    def test_bool_with_missing_float_synthesizer(self):
+        # Same scenario but synthesizer outputs floats in the .bool sub-column.
+        df = pd.DataFrame({"v": [True, float("nan"), False]})
+        result = separate_types(df, force=True)
+        result.df = result.df.copy()
+        if "v.bool" in result.df.columns:
+            result.df["v.bool"] = result.df["v.bool"].astype("float64")
+        merged = merge_types(result.df, result.column_map)
+        assert isinstance(merged["v"][0], bool)
+        assert isinstance(merged["v"][2], bool)
+
+    def test_cat_with_explicit_null(self):
+        # None (explicit null) vs NaN (missing/absent) both must not become "nan" string.
+        df = pd.DataFrame({"v": [None, "foo", None, "bar"]})
+        result = separate_types(df, force=True)
+        merged = merge_types(result.df, result.column_map)
+        assert merged["v"][1] == "foo"
+        assert merged["v"][3] == "bar"
+        for i in [0, 2]:
+            assert merged["v"][i] != "nan", f"Row {i} must not be 'nan' string"
+
+    def test_num_with_explicit_null(self):
+        df = pd.DataFrame({"v": [None, 42, None, 7]})
+        result = separate_types(df, force=True)
+        merged = merge_types(result.df, result.column_map)
+        assert merged["v"][1] == 42
+        assert merged["v"][3] == 7
+        for i in [0, 2]:
+            assert merged["v"][i] is None or pd.isna(merged["v"][i])
+
+    def test_mixed_types_with_missing(self):
+        # Column with int, string, bool, and None — all must survive.
+        vals = [42, "text", True, None, 7]
+        df = pd.DataFrame({"v": vals})
+        result = separate_types(df, force=True)
+        merged = merge_types(result.df, result.column_map)
+        assert merged["v"][0] == 42
+        assert merged["v"][1] == "text"
+        assert isinstance(merged["v"][2], bool) and merged["v"][2] is True
+        assert merged["v"][3] is None
+        assert merged["v"][4] == 7

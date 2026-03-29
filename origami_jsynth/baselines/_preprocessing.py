@@ -83,7 +83,7 @@ def records_to_dataframe(
     Returns the DataFrame and the state needed to invert the transformation.
     """
     df = flatten_records(records, include_non_leaf=False)
-    result = separate_types(df, force=False)
+    result = separate_types(df, force=True)
 
     # Record original dtypes of passthrough columns so we can restore them
     # after sampling (synthesizers may change dtypes, e.g. bool → string).

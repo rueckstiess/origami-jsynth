@@ -474,6 +474,6 @@ class TabDiffAdapter:
 
         # Apply type separation to all columns except target
         cols_to_separate = [c for c in df.columns if c != self.target_column]
-        result = separate_types(df, columns=cols_to_separate, force=False)
+        result = separate_types(df, columns=cols_to_separate, force=True)
         self._column_map = result.column_map
         return result.df

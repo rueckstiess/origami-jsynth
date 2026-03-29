@@ -359,13 +359,14 @@ def merge_types(
             elif typed_col.endswith(".bool"):
                 mask = dtypes == "bool"
                 bool_vals = df.loc[mask, typed_col]
-                # Convert string "True"/"False" back to actual booleans.
-                # Synthesizers may return object dtype (TabDiff) or
-                # StringDtype (MostlyAI Engine) — handle both.
-                if bool_vals.dtype == object or isinstance(
-                    bool_vals.dtype, pd.StringDtype
-                ):
-                    bool_vals = bool_vals.map({"True": True, "False": False}).fillna(bool_vals)
+                # Convert back to actual booleans regardless of how synthesizers
+                # encoded them: string "True"/"False" (TabDiff object dtype,
+                # MostlyAI StringDtype) or numeric 0.0/1.0 (TabDiff float dtype).
+                if bool_vals.dtype == object or isinstance(bool_vals.dtype, pd.StringDtype):
+                    mapped = bool_vals.map({"True": True, "False": False})
+                    bool_vals = mapped.where(mapped.notna(), bool_vals)
+                elif pd.api.types.is_numeric_dtype(bool_vals.dtype):
+                    bool_vals = bool_vals.map(lambda x: bool(x) if pd.notna(x) else x)
                 has_value = mask & df[typed_col].notna()
                 values.loc[has_value] = bool_vals.loc[has_value]
             # Note: .alen is metadata used below, not for direct value reconstruction

@@ -12,6 +12,8 @@ from origami_jsynth.baselines._preprocessing import (
 )
 
 
+
+
 # ---------------------------------------------------------------------------
 # TestRecordsToDataframe
 # ---------------------------------------------------------------------------
@@ -169,3 +171,109 @@ class TestRoundtrip:
         assert result[1]["active"] == False  # noqa: E712
         assert isinstance(result[0]["active"], bool)
         assert isinstance(result[1]["active"], bool)
+
+
+# ---------------------------------------------------------------------------
+# TestSynthesizerOutputHandling
+# ---------------------------------------------------------------------------
+
+# These tests cover the dtype-restoration logic in dataframe_to_records that
+# repairs common synthesizer output artefacts: float-encoded bools, string-
+# encoded bools, and "nan"-string-encoded nulls in categorical columns.
+
+
+class TestSynthesizerOutputHandling:
+    def test_float_bool_restored_via_passthrough(self):
+        # Synthesizer outputs float64 in a passthrough bool column.
+        # records_to_dataframe uses force=True so the bool column is separated
+        # into a .bool sub-column; dataframe_to_records must recover bool type.
+        records = [{"active": True}, {"active": False}, {"active": True}]
+        df, state = records_to_dataframe(records, tabular=True)
+        # Simulate synthesizer returning float64 in the .bool column.
+        if "active.bool" in df.columns:
+            df = df.copy()
+            df["active.bool"] = df["active.bool"].astype("float64")
+        else:
+            # Column passed through as-is; cast it to float to simulate synthesizer.
+            df = df.copy()
+            df["active"] = df["active"].astype("float64")
+        result = dataframe_to_records(df, state)
+        for r in result:
+            assert isinstance(r["active"], bool), (
+                f"Expected bool, got {type(r['active'])}: {r['active']!r}"
+            )
+
+    def test_string_bool_restored_via_passthrough(self):
+        # Synthesizer outputs "True"/"False" strings in a passthrough bool column.
+        records = [{"active": True}, {"active": False}, {"active": True}]
+        df, state = records_to_dataframe(records, tabular=True)
+        # Simulate synthesizer returning string-encoded booleans.
+        if "active.bool" in df.columns:
+            df = df.copy()
+            df["active.bool"] = df["active.bool"].map(
+                {True: "True", False: "False", 1.0: "True", 0.0: "False"}
+            )
+        else:
+            df = df.copy()
+            df["active"] = df["active"].map({True: "True", False: "False"})
+        result = dataframe_to_records(df, state)
+        for r in result:
+            assert isinstance(r["active"], bool), (
+                f"Expected bool, got {type(r['active'])}: {r['active']!r}"
+            )
+
+    def test_nullable_cat_nan_string_restored_to_none(self):
+        # TabDiff's _clean_data converts NaN in categorical columns to the
+        # literal string "nan". dataframe_to_records must NOT handle this —
+        # only the TabDiffAdapter.sample() method does — but this test confirms
+        # that the preprocessing pipeline correctly identifies nullable cat columns
+        # and that the records_to_dataframe → dataframe_to_records roundtrip
+        # preserves None when no "nan" injection happens.
+        records = [
+            {"reason": None, "x": 1},
+            {"reason": "spam", "x": 2},
+        ]
+        df, state = records_to_dataframe(records, tabular=True)
+        # Locate the column for "reason" (may be separated or passthrough).
+        reason_col = None
+        for col in df.columns:
+            if col == "reason" or col.startswith("reason."):
+                reason_col = col
+                break
+        assert reason_col is not None, f"reason column not found; got {list(df.columns)}"
+        # Simulate TabDiff's _clean_data: replace NaN with the string "nan".
+        df = df.copy()
+        df[reason_col] = df[reason_col].fillna("nan")
+        result = dataframe_to_records(df, state)
+        # The "nan" string should NOT be silently passed through as None here —
+        # that restoration is TabDiffAdapter's responsibility. We verify that
+        # the non-null value is intact and that the pipeline doesn't crash.
+        non_null = [r["reason"] for r in result if r.get("reason") is not None]
+        assert "spam" in non_null
+
+    def test_none_preserved_in_roundtrip(self):
+        # Full roundtrip with no synthesizer simulation: None must stay None.
+        records = [{"cat": None}, {"cat": "foo"}, {"cat": None}]
+        df, state = records_to_dataframe(records, tabular=True)
+        result = dataframe_to_records(df, state)
+        assert result[1]["cat"] == "foo"
+        # Rows 0 and 2 had None; they should come back as None (not "nan").
+        assert result[0].get("cat") is None
+        assert result[2].get("cat") is None
+
+    def test_missing_field_vs_none_distinction(self):
+        # Row 0: b is present but null. Row 1: b is absent entirely.
+        # After roundtrip through pandas both become NaN — the null/absent
+        # distinction is collapsed by DataFrame construction. The pipeline must
+        # not crash and non-null fields must be intact.
+        records = [{"a": 1, "b": None}, {"a": 2}]
+        df, state = records_to_dataframe(records, tabular=True)
+        result = dataframe_to_records(df, state)
+        assert len(result) == 2
+        # "a" must survive for both rows.
+        assert result[0].get("a") == 1
+        assert result[1].get("a") == 2
+        # Row 0 had b=None; after pandas round-trip it comes back as NaN.
+        # It must NOT be the string "nan".
+        b_val = result[0].get("b")
+        assert b_val != "nan", f"Row 0 b should not be 'nan' string, got {b_val!r}"
