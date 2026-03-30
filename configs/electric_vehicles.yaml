@@ -24,7 +24,7 @@ training:
   eval_epochs: 1
   eval_sample_size: 1000
   eval_strategy: epoch
-  num_epochs: 100
+  num_epochs: 50
   shuffle_keys: true
   target_loss_weight: 1.0
   warmup_steps: 1000

@@ -1,5 +1,5 @@
 data:
-  cat_threshold: 128
+  cat_threshold: 3000
   infer_schema: true
   max_vocab_size: 0
   model_array_lengths: true
