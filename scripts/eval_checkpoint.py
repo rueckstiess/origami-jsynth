@@ -5,9 +5,9 @@ from pathlib import Path
 from origami_jsynth.data import load_jsonl
 from origami_jsynth.eval import _evaluate_single
 
-CHECKPOINT = Path("results/electric_vehicles/origami/checkpoints/epoch_50.pt")
-DATA_DIR = Path("results/electric_vehicles/data")
-DATASET = "electric_vehicles"
+CHECKPOINT = Path("results/github_issues/origami/checkpoints/epoch_70.pt")
+DATA_DIR = Path("results/github_issues/data")
+DATASET = "github_issues"
 NUM_WORKERS = 12
 
 
