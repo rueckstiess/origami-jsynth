@@ -16,11 +16,11 @@ dependencies = [
     "itables>=2.7.0",
     "origami-ml==2.0.0a14",
     "sdmetrics>=0.27.1",
-    "wandb>=0.25.0",
 ]
 
 [project.optional-dependencies]
 wandb = ["wandb"]
+yanex = ["yanex"]
 baselines = [
     "sdv>=1.0",
     "be-great>=0.0.5",

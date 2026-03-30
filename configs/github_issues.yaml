@@ -19,10 +19,10 @@ model:
   n_layers: 8
   num_mixture_components: 5
 training:
-  batch_size: 128
+  batch_size: 64
   constrain_grammar: true
   constrain_schema: true
-  dataloader_num_workers: 20
+  dataloader_num_workers: 0
   eval_sample_size: 1000
   eval_steps: 1000
   eval_strategy: steps
