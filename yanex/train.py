@@ -183,12 +183,15 @@ if max_minutes is not None:
     callbacks.append(TimeoutCallback(max_minutes * 60))
 
 if use_wandb:
+    yanex_name = yanex.get_metadata().get("name", f"origami-{dataset}")
+    yanex_id = yanex.get_experiment_id()
     callbacks.append(
         WandbCallback(
             project="origami-jsynth",
-            name=f"origami-{dataset}",
+            name=yanex_name,
             config=merged_config,
             group=dataset,
+            run_id=yanex_id,
         )
     )
 

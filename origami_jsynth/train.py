@@ -52,6 +52,7 @@ class WandbCallback(TrainerCallback):
         name: str,
         config: dict,
         group: str | None = None,
+        run_id: str | None = None,
         log_every: int = 100,
     ) -> None:
         super().__init__()
@@ -59,6 +60,7 @@ class WandbCallback(TrainerCallback):
         self.name = name
         self.config = config
         self.group = group
+        self.run_id = run_id
         self.log_every = log_every
         self.run = None
 
@@ -70,6 +72,7 @@ class WandbCallback(TrainerCallback):
         self.run = wandb.init(
             project=self.project,
             name=self.name,
+            id=self.run_id,
             resume="allow",
             config=self.config,
             group=self.group,
