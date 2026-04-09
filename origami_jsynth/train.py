@@ -86,15 +86,17 @@ class WandbCallback(TrainerCallback):
             return
         if state.global_step % self.log_every != 0:
             return
-        self.run.log(
-            {
-                "loss": state.current_batch_loss,
-                "lr": state.current_lr,
-                "batch_dt": state.current_batch_dt,
-                "epoch": state.epoch,
-            },
-            step=state.global_step,
-        )
+        metrics = {
+            "loss": state.current_batch_loss,
+            "discrete_loss": state.current_discrete_loss,
+            "lr": state.current_lr,
+            "batch_dt": state.current_batch_dt,
+            "epoch": state.epoch,
+        }
+        if state.current_continuous_loss is not None:
+            metrics["continuous_loss"] = state.current_continuous_loss
+            metrics["continuous_loss_weight"] = state.current_continuous_loss_weight
+        self.run.log(metrics, step=state.global_step)
 
     def on_evaluate(self, trainer: Any, state: TrainResult, payload: dict[str, float]) -> None:
         if not trainer.is_main_process or self.run is None or not payload:
