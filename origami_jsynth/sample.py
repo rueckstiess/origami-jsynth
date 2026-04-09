@@ -9,7 +9,20 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import torch
+
 from .data import load_jsonl, save_jsonl
+
+
+def _resolve_sampling_device() -> str:
+    """Pick the best device for Origami sampling.
+
+    CUDA is faster than CPU for sampling, but MPS is significantly slower
+    than CPU (~5x), so we force CPU when only MPS is available.
+    """
+    if torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
 
 
 def sample_parallel(
@@ -158,6 +171,7 @@ def sample_dataset(
     generate_kwargs: dict[str, Any] = {"max_length": 2048}
     if not tabular:
         generate_kwargs["allow_complex_values"] = True
+    generate_kwargs.setdefault("device", _resolve_sampling_device())
     generate_kwargs.update(sample_kwargs)
 
     output_paths: list[Path] = []

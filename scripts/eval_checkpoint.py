@@ -19,12 +19,15 @@ def main() -> None:
     n = len(train_records)
     print(f"Train: {n}, Test: {len(test_records)}")
 
+    from origami_jsynth.sample import _resolve_sampling_device
+
     print(f"\nSampling {n} records from {CHECKPOINT} ({NUM_WORKERS} workers)...")
     synthetic_records = sample_parallel(
         CHECKPOINT,
         n=n,
         num_workers=NUM_WORKERS,
         max_length=2048,
+        device=_resolve_sampling_device(),
     )
     print(f"Generated {len(synthetic_records)} records")
 
