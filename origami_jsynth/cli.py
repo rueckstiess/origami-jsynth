@@ -736,10 +736,11 @@ def cmd_all(args: argparse.Namespace) -> None:
 
 
 def cmd_full_suite(args: argparse.Namespace) -> None:
-    """Run all model+dataset combos (base + DCR) with V100 overrides."""
+    """Run all model+dataset combos in base or DCR mode with V100 overrides."""
     from .suite import run_full_suite
 
     status = run_full_suite(
+        dcr=args.dcr,
         output_dir=args.output_dir,
         remote=getattr(args, "remote", None),
         replicates=args.replicates,
@@ -877,9 +878,14 @@ def main() -> None:
     # full-suite
     p_suite = subparsers.add_parser(
         "full-suite",
-        help="Run all model+dataset combos (base + DCR) with V100 overrides",
+        help="Run all model+dataset combos in base or DCR mode with V100 overrides",
     )
     p_suite.add_argument("--output-dir", default="./results", help="Base output directory")
+    p_suite.add_argument(
+        "--dcr",
+        action="store_true",
+        help="DCR mode: run privacy-only evaluation instead of fidelity+utility+detection",
+    )
     p_suite.add_argument(
         "--remote",
         default=None,

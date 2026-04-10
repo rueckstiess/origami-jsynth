@@ -22,26 +22,35 @@ _NOOP_SYNC = patch(
 
 class TestComboGeneration:
     def test_no_oom_combos_in_list(self):
-        combos = _build_combos()
-        for model, dataset, _dcr in combos:
-            assert (model, dataset) not in SKIP_OOM
+        for dcr in (False, True):
+            combos = _build_combos(dcr)
+            for model, dataset, _dcr in combos:
+                assert (model, dataset) not in SKIP_OOM
 
-    def test_each_non_oom_pair_has_base_and_dcr(self):
-        combos = _build_combos()
+    def test_base_combos_all_have_dcr_false(self):
+        combos = _build_combos(False)
+        assert all(dcr is False for _, _, dcr in combos)
+
+    def test_dcr_combos_all_have_dcr_true(self):
+        combos = _build_combos(True)
+        assert all(dcr is True for _, _, dcr in combos)
+
+    def test_each_non_oom_pair_present_in_each_mode(self):
         non_oom_pairs = {
             (m, d) for m in SUITE_MODELS for d in SUITE_DATASETS if (m, d) not in SKIP_OOM
         }
-        for model, dataset in non_oom_pairs:
-            assert (model, dataset, False) in combos, f"missing base: {model}+{dataset}"
-            assert (model, dataset, True) in combos, f"missing DCR: {model}+{dataset}"
+        for dcr in (False, True):
+            combos = _build_combos(dcr)
+            combo_pairs = {(m, d) for m, d, _ in combos}
+            assert combo_pairs == non_oom_pairs
 
     def test_combo_count(self):
-        combos = _build_combos()
         non_oom = len(SUITE_MODELS) * len(SUITE_DATASETS) - len(SKIP_OOM)
-        assert len(combos) == non_oom * 2  # base + DCR
+        assert len(_build_combos(False)) == non_oom
+        assert len(_build_combos(True)) == non_oom
 
     def test_all_models_and_datasets_represented(self):
-        combos = _build_combos()
+        combos = _build_combos(False)
         models = {m for m, _, _ in combos}
         datasets = {d for _, d, _ in combos}
         assert models == set(SUITE_MODELS)
@@ -134,9 +143,10 @@ class TestRunFullSuite:
         assert status[("tvae", "adult", False)] == "skipped_done"
         assert ("tvae", "adult", False) not in call_log
 
-    def test_oom_combos_skipped(self, tmp_path):
+    def test_oom_combos_skipped_base(self, tmp_path):
         with _NOOP_SYNC, patch("origami_jsynth.suite.cmd_all", lambda args: None):
             status = run_full_suite(
+                dcr=False,
                 output_dir=str(tmp_path),
                 replicates=1,
                 num_workers=1,
@@ -145,7 +155,37 @@ class TestRunFullSuite:
 
         for model, dataset in SKIP_OOM:
             assert status[(model, dataset, False)] == "skipped_oom"
+
+    def test_oom_combos_skipped_dcr(self, tmp_path):
+        with _NOOP_SYNC, patch("origami_jsynth.suite.cmd_all", lambda args: None):
+            status = run_full_suite(
+                dcr=True,
+                output_dir=str(tmp_path),
+                replicates=1,
+                num_workers=1,
+                no_wandb=True,
+            )
+
+        for model, dataset in SKIP_OOM:
             assert status[(model, dataset, True)] == "skipped_oom"
+
+    def test_dcr_flag_passed_to_cmd_all(self, tmp_path):
+        """run_full_suite(dcr=True) must pass dcr=True to every cmd_all call."""
+        seen_dcr = set()
+
+        def mock_cmd_all(args):
+            seen_dcr.add(args.dcr)
+
+        with _NOOP_SYNC, patch("origami_jsynth.suite.cmd_all", mock_cmd_all):
+            run_full_suite(
+                dcr=True,
+                output_dir=str(tmp_path),
+                replicates=1,
+                num_workers=1,
+                no_wandb=True,
+            )
+
+        assert seen_dcr == {True}
 
     def test_failure_continues_to_next(self, tmp_path):
         """A failing combo should not stop the suite."""

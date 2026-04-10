@@ -84,19 +84,19 @@ def _build_args(
     )
 
 
-def _build_combos() -> list[tuple[str, str, bool]]:
-    """Return (model, dataset, dcr) triples for all non-OOM combos."""
+def _build_combos(dcr: bool) -> list[tuple[str, str, bool]]:
+    """Return (model, dataset, dcr) triples for all non-OOM combos in *dcr* mode."""
     combos = []
     for model in SUITE_MODELS:
         for dataset in SUITE_DATASETS:
             if (model, dataset) in SKIP_OOM:
                 continue
-            combos.append((model, dataset, False))
-            combos.append((model, dataset, True))
+            combos.append((model, dataset, dcr))
     return combos
 
 
 def run_full_suite(
+    dcr: bool = False,
     output_dir: str = "./results",
     remote: str | None = None,
     replicates: int = 10,
@@ -104,20 +104,23 @@ def run_full_suite(
     no_wandb: bool = False,
     max_minutes: float | None = None,
 ) -> dict[tuple[str, str, bool], str]:
-    """Run all model+dataset combos with both base and DCR modes.
+    """Run all model+dataset combos for *dcr* mode.
+
+    When ``dcr=False`` (default): runs base experiments and evaluates
+    fidelity, utility, and detection.
+    When ``dcr=True``: runs DCR experiments and evaluates privacy only.
 
     Returns a status dict mapping (model, dataset, dcr) to one of:
     ``"completed"``, ``"skipped_oom"``, ``"skipped_done"``, ``"failed"``.
     """
-    combos = _build_combos()
+    combos = _build_combos(dcr)
     total = len(combos)
 
     status: dict[tuple[str, str, bool], str] = {}
     for model in SUITE_MODELS:
         for dataset in SUITE_DATASETS:
             if (model, dataset) in SKIP_OOM:
-                status[(model, dataset, False)] = "skipped_oom"
-                status[(model, dataset, True)] = "skipped_oom"
+                status[(model, dataset, dcr)] = "skipped_oom"
 
     with RemoteSync(local_dir=output_dir, remote_url=remote):
         for i, (model, dataset, dcr) in enumerate(combos, 1):
@@ -208,7 +211,10 @@ def _print_summary(status: dict[tuple[str, str, bool], str]) -> None:
     print(f"{BOLD}Full Suite Summary{RESET}")
     print(f"{'=' * 70}")
 
-    for mode_label, dcr_flag in [("Base", False), ("DCR", True)]:
+    # Determine which mode is present in the status dict.
+    dcr_flags = {dcr for (_, _, dcr) in status}
+    for dcr_flag in sorted(dcr_flags):
+        mode_label = "DCR" if dcr_flag else "Base"
         print(f"\n{BOLD}{mode_label}:{RESET}")
         header = "".ljust(model_col) + "  ".join(
             DATASET_LABELS.get(d, d).rjust(col_w) for d in SUITE_DATASETS
