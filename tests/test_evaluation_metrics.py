@@ -10,7 +10,6 @@ from origami_jsynth.evaluation.fidelity import FidelityResult, compute_fidelity
 from origami_jsynth.evaluation.privacy import PrivacyResult, compute_privacy
 from origami_jsynth.evaluation.utility import UtilityResult, compute_utility
 
-
 # ---------------------------------------------------------------------------
 # Helper data generators
 # ---------------------------------------------------------------------------

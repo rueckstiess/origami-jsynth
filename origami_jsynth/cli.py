@@ -831,7 +831,7 @@ def main() -> None:
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
         sys.exit(130)
-    except Exception as e:
+    except Exception:
         import traceback
 
         traceback.print_exc()

@@ -10,7 +10,6 @@ from origami_jsynth.evaluation.type_separation import (
     separate_types,
 )
 
-
 # ---------------------------------------------------------------------------
 # TestInferCellDtype
 # ---------------------------------------------------------------------------

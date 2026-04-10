@@ -314,10 +314,7 @@ def find_best(data, table_cfg, metric_key):
             if model_data is None or metric_key not in model_data:
                 continue
             val = model_data[metric_key]["mean"]
-            if best_val is None:
-                best_val = val
-                best_models = [model]
-            elif (direction and val > best_val) or (not direction and val < best_val):
+            if best_val is None or (direction and val > best_val) or (not direction and val < best_val):
                 best_val = val
                 best_models = [model]
             elif val == best_val:

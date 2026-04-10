@@ -5,7 +5,6 @@ import pytest
 
 from origami_jsynth.evaluation.shared import encode_features, prepare_union_table
 
-
 # ---------------------------------------------------------------------------
 # TestPrepareUnionTable
 # ---------------------------------------------------------------------------

@@ -29,7 +29,7 @@ from pathlib import Path
 # Ensure project root is importable when running as a script.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from origami_jsynth.baselines._preprocessing import PreprocessingState, records_to_dataframe
+from origami_jsynth.baselines._preprocessing import records_to_dataframe
 from origami_jsynth.data import load_jsonl
 from origami_jsynth.registry import get_dataset
 

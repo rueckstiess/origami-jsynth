@@ -2,8 +2,8 @@
 """Resource monitor for GPU and CPU usage. No dependencies beyond stdlib."""
 
 import subprocess
-import time
 import sys
+import time
 from collections import deque
 
 

@@ -40,7 +40,7 @@ class EvaluationResult:
     detection_result: DetectionResult | None = None
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "EvaluationResult":
+    def from_dict(cls, d: dict[str, Any]) -> EvaluationResult:
         """Reconstruct from a dictionary produced by to_dict()."""
         details = d.get("details", {})
         return cls(
