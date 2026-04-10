@@ -32,8 +32,10 @@ yanex.assert_dependency("sample.py", "samples")
 
 dataset: str = yanex.get_graph().get_param("dataset")
 try:
-    dcr: bool = yanex.get_graph().get_param("dcr")
-except:
+    dcr: bool = yanex.get_param("dcr", None)
+    if not dcr:
+        dcr = yanex.get_graph().get_param("dcr")
+except Exception:
     dcr = False
 all_deps = {dep.script_path.stem: dep for dep in yanex.get_dependencies(transitive=True)}
 data_dir: Path = all_deps["data"].artifacts_dir
