@@ -116,7 +116,8 @@ def _prepare_yelp(
     seed: int = 42,
 ) -> Path:
     """Prepare Yelp dataset from manual download."""
-    raw_path = data_dir.parent.parent / "yelp_academic_dataset_business.json"
+    project_results = Path(__file__).parent.parent / "results"
+    raw_path = project_results / "yelp_academic_dataset_business.json"
 
     if not raw_path.exists():
         print(YELP_INSTRUCTIONS.format(raw_path=raw_path))

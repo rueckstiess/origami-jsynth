@@ -17,7 +17,7 @@ model:
   kvpe_pooling: sum
   n_heads: 4
   n_layers: 8
-  num_mixture_components: 5
+  num_mixture_components: 10
 training:
   batch_size: 64
   constrain_grammar: true
