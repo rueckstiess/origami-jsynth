@@ -87,8 +87,8 @@ def _build_args(
 def _build_combos(dcr: bool) -> list[tuple[str, str, bool]]:
     """Return (model, dataset, dcr) triples for all non-OOM combos in *dcr* mode."""
     combos = []
-    for model in SUITE_MODELS:
-        for dataset in SUITE_DATASETS:
+    for dataset in reversed(SUITE_DATASETS):
+        for model in reversed(SUITE_MODELS):
             if (model, dataset) in SKIP_OOM:
                 continue
             combos.append((model, dataset, dcr))
