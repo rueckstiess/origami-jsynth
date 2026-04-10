@@ -5,9 +5,13 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .baselines import MODEL_NAMES
 from .registry import DATASET_NAMES
+
+if TYPE_CHECKING:
+    from .sync import RemoteSync
 
 
 def _wandb_available() -> bool:
@@ -91,9 +95,8 @@ def _require_model(paths: dict[str, Path], args: argparse.Namespace) -> None:
 
 def _require_samples(paths: dict[str, Path], args: argparse.Namespace) -> None:
     """Check that synthetic samples exist, exit with helpful message if not."""
-    has_samples = (
-        paths["samples_dir"].exists()
-        and any(paths["samples_dir"].glob("synthetic_*.jsonl"))
+    has_samples = paths["samples_dir"].exists() and any(
+        paths["samples_dir"].glob("synthetic_*.jsonl")
     )
     if not has_samples:
         print(
@@ -171,9 +174,7 @@ def cmd_data(args: argparse.Namespace) -> None:
 
     train_df.to_csv(train_csv, index=False)
     test_df.to_csv(test_csv, index=False)
-    print(
-        f"Saved preprocessed CSVs ({df.shape[1]} columns) to {data_dir}"
-    )
+    print(f"Saved preprocessed CSVs ({df.shape[1]} columns) to {data_dir}")
 
 
 def cmd_train(args: argparse.Namespace) -> None:
@@ -283,7 +284,9 @@ def cmd_sample(args: argparse.Namespace) -> None:
                 print(f"Replicate {i}/{args.replicates}: sampling {n_train} records...")
                 records = synth.sample(n_train)
                 save_jsonl(records, output_path)
-                print(f"Replicate {i}/{args.replicates}: saved {len(records)} records to {output_path}")
+                print(
+                    f"Replicate {i}/{args.replicates}: saved {len(records)} records to {output_path}"
+                )
 
 
 def cmd_eval(args: argparse.Namespace) -> None:
@@ -315,13 +318,20 @@ def cmd_overview(args: argparse.Namespace) -> None:
     models = ["tvae", "ctgan", "realtabformer", "mostlyai", "tabdiff", "origami"]
 
     model_labels = {
-        "origami": "Origami", "ctgan": "CTGAN", "tvae": "TVAE",
+        "origami": "Origami",
+        "ctgan": "CTGAN",
+        "tvae": "TVAE",
         "realtabformer": "REaLTabFormer",
-        "mostlyai": "TabularARGN", "tabdiff": "TabDiff",
+        "mostlyai": "TabularARGN",
+        "tabdiff": "TabDiff",
     }
     dataset_labels = {
-        "adult": "Adult", "diabetes": "Diabetes", "electric_vehicles": "Elec. Vehicles",
-        "ddxplus": "DDXPlus", "github_issues": "GitHub Issues", "yelp": "Yelp",
+        "adult": "Adult",
+        "diabetes": "Diabetes",
+        "electric_vehicles": "Elec. Vehicles",
+        "ddxplus": "DDXPlus",
+        "github_issues": "GitHub Issues",
+        "yelp": "Yelp",
     }
 
     def load_agg(dataset, model, dcr=False):
@@ -355,7 +365,7 @@ def cmd_overview(args: argparse.Namespace) -> None:
         ("tvae", "yelp"),
         ("tvae", "electric_vehicles"),
         ("realtabformer", "ddxplus"),
-        ("realtabformer", "github_issues")
+        ("realtabformer", "github_issues"),
     }
 
     if args.latex:
@@ -391,7 +401,9 @@ def cmd_overview(args: argparse.Namespace) -> None:
 
     def print_count_table(title, counts):
         print(f"\n{title}")
-        header = "".ljust(ds_col_w) + "  ".join(model_labels.get(m, m).rjust(model_ws[m]) for m in models)
+        header = "".ljust(ds_col_w) + "  ".join(
+            model_labels.get(m, m).rjust(model_ws[m]) for m in models
+        )
         print(header)
         print("-" * len(header))
         for d in datasets:
@@ -427,8 +439,10 @@ def cmd_overview(args: argparse.Namespace) -> None:
 
         CYAN = "\033[36m"
         print(f"\n\n{CYAN}{BOLD}{title}{RESET}")
-        header = "".ljust(ds_col_w) + "".ljust(metric_col_w) + "  ".join(
-            model_labels.get(m, m).rjust(val_w) for m in models
+        header = (
+            "".ljust(ds_col_w)
+            + "".ljust(metric_col_w)
+            + "  ".join(model_labels.get(m, m).rjust(val_w) for m in models)
         )
         print(header)
         print("-" * len(header))
@@ -482,10 +496,11 @@ def _print_markdown_tables(datasets, models, model_labels, dataset_labels, data,
         ("Privacy", "privacy", "dcr"),
     ]
 
-    available_models = [m for m in models if any(
-        data[d].get(src, {}).get(m) for d in datasets
-        for src in ("base", "dcr")
-    )]
+    available_models = [
+        m
+        for m in models
+        if any(data[d].get(src, {}).get(m) for d in datasets for src in ("base", "dcr"))
+    ]
 
     for title, metric_key, source in metric_tables:
         print(f"\n### {title}\n")
@@ -623,7 +638,11 @@ def _print_latex_tables(datasets, models, model_labels, dataset_labels, data, oo
                 if model_data is None or metric_key not in model_data:
                     continue
                 val = model_data[metric_key]["mean"]
-                if best_val is None or (direction and val > best_val) or (not direction and val < best_val):
+                if (
+                    best_val is None
+                    or (direction and val > best_val)
+                    or (not direction and val < best_val)
+                ):
                     best_val, best_models = val, [model]
                 elif val == best_val:
                     best_models.append(model)
@@ -639,7 +658,9 @@ def _print_latex_tables(datasets, models, model_labels, dataset_labels, data, oo
         source = table_cfg["source"]
         metrics = table_cfg["metrics"]
 
-        available_models = [m for m in models if any(m in data[ds].get(source, {}) for ds in datasets)]
+        available_models = [
+            m for m in models if any(m in data[ds].get(source, {}) for ds in datasets)
+        ]
         if not available_models:
             continue
 
@@ -682,10 +703,10 @@ def _print_latex_tables(datasets, models, model_labels, dataset_labels, data, oo
                         mean_val = model_data[metric_key]["mean"]
                         std_val = model_data[metric_key]["std"]
                         is_count = metric_key.startswith("privacy_exact_matches")
-                        is_best = is_primary and best_per_metric[metric_key].get(
-                            (ds, model), False
+                        is_best = is_primary and best_per_metric[metric_key].get((ds, model), False)
+                        row_parts.append(
+                            fmt_val(mean_val, std_val, is_count=is_count, bold=is_best)
                         )
-                        row_parts.append(fmt_val(mean_val, std_val, is_count=is_count, bold=is_best))
 
                 lines.append("    " + " & ".join(row_parts) + " \\\\")
 
@@ -714,6 +735,22 @@ def cmd_all(args: argparse.Namespace) -> None:
         args.remote = saved_remote
 
 
+def cmd_full_suite(args: argparse.Namespace) -> None:
+    """Run all model+dataset combos (base + DCR) with V100 overrides."""
+    from .suite import run_full_suite
+
+    status = run_full_suite(
+        output_dir=args.output_dir,
+        remote=getattr(args, "remote", None),
+        replicates=args.replicates,
+        num_workers=args.num_workers,
+        no_wandb=getattr(args, "no_wandb", False),
+        max_minutes=args.max_minutes,
+    )
+    if any(v == "failed" for v in status.values()):
+        sys.exit(1)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="origami-jsynth",
@@ -726,7 +763,9 @@ def main() -> None:
         p.add_argument("--dataset", required=True, choices=DATASET_NAMES, help="Dataset name")
         p.add_argument("--output-dir", default="./results", help="Base output directory")
         p.add_argument(
-            "--model", default="origami", choices=MODEL_NAMES,
+            "--model",
+            default="origami",
+            choices=MODEL_NAMES,
             help="Synthesizer model (default: origami)",
         )
         p.add_argument(
@@ -773,7 +812,10 @@ def main() -> None:
     add_common_args(p_sample)
     p_sample.add_argument("--num-workers", type=int, default=4, help="Number of parallel workers")
     p_sample.add_argument(
-        "-R", "--replicates", type=int, default=1,
+        "-R",
+        "--replicates",
+        type=int,
+        default=1,
         help="Number of independent sampling rounds (default: 1)",
     )
     p_sample.add_argument(
@@ -793,8 +835,12 @@ def main() -> None:
     # results
     p_results = subparsers.add_parser("results", help="Show evaluation status and results overview")
     p_results.add_argument("--output-dir", default="./results", help="Base output directory")
-    p_results.add_argument("--latex", action="store_true", help="Output LaTeX tables instead of ASCII")
-    p_results.add_argument("--markdown", action="store_true", help="Output Markdown tables instead of ASCII")
+    p_results.add_argument(
+        "--latex", action="store_true", help="Output LaTeX tables instead of ASCII"
+    )
+    p_results.add_argument(
+        "--markdown", action="store_true", help="Output Markdown tables instead of ASCII"
+    )
     p_results.set_defaults(func=cmd_overview)
 
     # all
@@ -802,7 +848,10 @@ def main() -> None:
     add_common_args(p_all)
     p_all.add_argument("--num-workers", type=int, default=4, help="Number of parallel workers")
     p_all.add_argument(
-        "-R", "--replicates", type=int, default=1,
+        "-R",
+        "--replicates",
+        type=int,
+        default=1,
         help="Number of independent sampling rounds (default: 1)",
     )
     p_all.add_argument(
@@ -824,6 +873,45 @@ def main() -> None:
         help="Disable Weights & Biases logging (enabled by default when wandb is installed)",
     )
     p_all.set_defaults(func=cmd_all)
+
+    # full-suite
+    p_suite = subparsers.add_parser(
+        "full-suite",
+        help="Run all model+dataset combos (base + DCR) with V100 overrides",
+    )
+    p_suite.add_argument("--output-dir", default="./results", help="Base output directory")
+    p_suite.add_argument(
+        "--remote",
+        default=None,
+        metavar="S3_URL",
+        help="S3 URL to sync results to (syncs every 5 min throughout the full suite)",
+    )
+    p_suite.add_argument(
+        "-R",
+        "--replicates",
+        type=int,
+        default=10,
+        help="Number of independent sampling rounds (default: 10)",
+    )
+    p_suite.add_argument(
+        "--num-workers",
+        type=int,
+        default=4,
+        help="Number of parallel sampling workers",
+    )
+    p_suite.add_argument(
+        "--max-minutes",
+        type=float,
+        default=None,
+        help="Default max training time per combo in minutes "
+        "(overridden by per-combo V100 settings)",
+    )
+    p_suite.add_argument(
+        "--no-wandb",
+        action="store_true",
+        help="Disable Weights & Biases logging",
+    )
+    p_suite.set_defaults(func=cmd_full_suite)
 
     args = parser.parse_args()
     try:
