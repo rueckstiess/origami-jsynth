@@ -87,10 +87,11 @@ class REaLTabFormerAdapter:
 
     def __init__(self, tabular: bool = True, dataset_info: Any = None, **kwargs: Any) -> None:
         self.tabular = tabular
+        self._target_column: str | None = dataset_info.target_column if dataset_info else None
         merged = {**_DEFAULTS, **kwargs}
         # Map dataset target_column to realtabformer's target_col fit param.
-        if dataset_info and dataset_info.target_column:
-            merged.setdefault("target_col", dataset_info.target_column)
+        if self._target_column:
+            merged.setdefault("target_col", self._target_column)
         self.fit_kwargs: dict[str, Any] = {}
         for key in list(merged):
             if key in _FIT_PARAMS:
@@ -116,7 +117,10 @@ class REaLTabFormerAdapter:
                 "Install with: pip install origami-jsynth[baselines]"
             ) from None
 
-        df, self._state = records_to_dataframe(records, self.tabular)
+        # Exclude target column from type separation so REaLTabFormer can
+        # reference it by its original name.
+        exclude = [self._target_column] if self._target_column else None
+        df, self._state = records_to_dataframe(records, self.tabular, exclude_columns=exclude)
 
         # Redirect RTF's internal working directories into the checkpoint
         # directory so they don't pollute the working directory.

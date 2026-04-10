@@ -77,6 +77,14 @@ DATASETS: dict[str, DatasetInfo] = {
         has_canonical_split=False,
         hf_path=None,  # manual download required
     ),
+    "diagnostic": DatasetInfo(
+        name="diagnostic",
+        target_column="target",
+        task_type="binclass",
+        tabular=True,
+        has_canonical_split=True,
+        hf_path=None,  # generated locally
+    ),
 }
 
 DATASET_NAMES = list(DATASETS.keys())

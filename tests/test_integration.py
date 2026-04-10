@@ -45,13 +45,16 @@ def type_check_records():
     return records
 
 
+def _is_null(v):
+    """Check if a value is null (None or float NaN)."""
+    return v is None or (isinstance(v, float) and np.isnan(v))
+
+
 def check_types(records_out):
     """Assert that bool and nullable-cat fields have the correct Python types."""
     for r in records_out:
         for field in ("active", "has_feature"):
-            if field in r and r[field] is not None and not (
-                isinstance(r[field], float) and np.isnan(r[field])
-            ):
+            if field in r and not _is_null(r[field]):
                 assert isinstance(r[field], bool), (
                     f"{field} should be bool, got {type(r[field])}: {r[field]!r}"
                 )
@@ -59,8 +62,8 @@ def check_types(records_out):
             assert r["reason"] != "nan", (
                 f"reason should not be literal 'nan' string, got {r['reason']!r}"
             )
-            assert r["reason"] is None or isinstance(r["reason"], str), (
-                f"reason should be None or str, got {type(r['reason'])}: {r['reason']!r}"
+            assert _is_null(r["reason"]) or isinstance(r["reason"], str), (
+                f"reason should be None/NaN or str, got {type(r['reason'])}: {r['reason']!r}"
             )
 
 
@@ -75,15 +78,23 @@ def check_types(records_out):
 
 class TestTabDiffOutputFormat:
     def _simulate_tabdiff_output(self, df):
-        """Apply the transformations TabDiff is known to make to the DataFrame."""
+        """Apply the transformations TabDiff is known to make to the DataFrame.
+
+        TabDiff converts bools to float64 and fills NaN in cat columns with
+        "nan" string. The TabDiffAdapter.sample() cleans up the "nan" strings
+        before calling dataframe_to_records, so we simulate both the corruption
+        and the cleanup here.
+        """
         df = df.copy()
         for col in df.columns:
             # Bool columns: TabDiff outputs float64
             if pd.api.types.is_bool_dtype(df[col]):
                 df[col] = df[col].astype("float64")
-            # Object (nullable cat) columns: TabDiff fills NaN with "nan" string
+            # Object (nullable cat) columns: TabDiff fills NaN with "nan" string,
+            # then TabDiffAdapter.sample() restores them to NaN before handoff.
             elif df[col].dtype == object and df[col].isna().any():
                 df[col] = df[col].fillna("nan")
+                df[col] = df[col].replace("nan", np.nan)
         return df
 
     def test_bool_columns_restored_from_float(self, type_check_records):
@@ -92,7 +103,7 @@ class TestTabDiffOutputFormat:
         result = dataframe_to_records(df_synth, state)
         check_types(result)
 
-    def test_nullable_cat_restored_from_nan_string(self, type_check_records):
+    def test_nullable_cat_restored(self, type_check_records):
         df, state = records_to_dataframe(type_check_records, tabular=True)
         df_synth = self._simulate_tabdiff_output(df)
         result = dataframe_to_records(df_synth, state)
@@ -102,7 +113,7 @@ class TestTabDiffOutputFormat:
         # Both bugs at once: float bools AND "nan" strings.
         df, state = records_to_dataframe(type_check_records, tabular=True)
         df_synth = self._simulate_tabdiff_output(df)
-        # Confirm the simulation actually applied the transformations.
+        # Confirm the simulation actually applied the bool transformation.
         bool_cols = [c for c in df.columns if pd.api.types.is_bool_dtype(df[c])]
         assert bool_cols, "Expected at least one bool column"
         for col in bool_cols:
@@ -113,22 +124,11 @@ class TestTabDiffOutputFormat:
         assert len(result) == len(type_check_records)
         check_types(result)
 
-    def test_nullable_cat_type_separated_with_force_true(self, type_check_records):
-        # With force=True, nullable cat columns are type-separated into .dtype + .cat.
-        # merge_types uses .dtype to restore None correctly — no separate tracking needed.
-        from origami_jsynth.baselines.tabdiff import TabDiffAdapter
-
-        class _FakeDatasetInfo:
-            target_column = "category"
-            task_type = "multiclass"
-
-        adapter = TabDiffAdapter(tabular=True, dataset_info=_FakeDatasetInfo())
-        df = adapter._prepare_dataframe(type_check_records)
-        # 'reason' is a nullable cat column — must be type-separated.
-        assert "reason.dtype" in df.columns, (
-            "nullable cat column 'reason' should be type-separated into reason.dtype"
-        )
-        assert "reason.cat" in df.columns
+    def test_exclude_columns_preserves_target(self, type_check_records):
+        # TabDiff excludes target from type separation.
+        df, state = records_to_dataframe(type_check_records, tabular=True, exclude_columns=["category"])
+        assert "category" in df.columns
+        assert "category.dtype" not in df.columns
 
 
 # ---------------------------------------------------------------------------

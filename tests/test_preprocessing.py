@@ -61,6 +61,42 @@ class TestRecordsToDataframe:
         df, state = records_to_dataframe(records, tabular=True)
         assert "v.dtype" in df.columns
 
+    def test_exclude_columns_not_separated(self):
+        # Excluded columns should keep their original name, not get .dtype/.cat suffixes.
+        records = [{"target": "pos", "feat": 1.0}, {"target": "neg", "feat": 2.0}]
+        df, state = records_to_dataframe(records, tabular=True, exclude_columns=["target"])
+        assert "target" in df.columns
+        assert "target.dtype" not in df.columns
+        assert "target.cat" not in df.columns
+
+    def test_exclude_columns_others_still_separated(self):
+        # Non-excluded columns should still be processed by separate_types.
+        # With force=False (default), only mixed-type columns get .dtype/.cat
+        # sub-columns; homogeneous columns pass through as-is. Use a mixed
+        # column to verify separation still applies to non-excluded columns.
+        records = [{"target": "pos", "feat": 1}, {"target": "neg", "feat": "text"}]
+        df, state = records_to_dataframe(records, tabular=True, exclude_columns=["target"])
+        assert "feat.dtype" in df.columns
+
+    def test_exclude_columns_roundtrip(self):
+        # Full roundtrip with excluded column should preserve it.
+        records = [
+            {"target": "pos", "score": 0.9, "flag": True},
+            {"target": "neg", "score": 0.1, "flag": False},
+        ]
+        df, state = records_to_dataframe(records, tabular=True, exclude_columns=["target"])
+        result = dataframe_to_records(df, state)
+        assert result[0]["target"] == "pos"
+        assert result[1]["target"] == "neg"
+
+    def test_exclude_columns_with_missing_values(self):
+        # Excluded column with NaN should keep NaN as-is (no .dtype indicator).
+        records = [{"target": "pos", "x": 1}, {"target": None, "x": 2}]
+        df, state = records_to_dataframe(records, tabular=True, exclude_columns=["target"])
+        assert "target" in df.columns
+        assert "target.dtype" not in df.columns
+        assert pd.isna(df["target"].iloc[1])
+
 
 # ---------------------------------------------------------------------------
 # TestDataframeToRecords

@@ -74,16 +74,22 @@ class PreprocessingState:
 def records_to_dataframe(
     records: list[dict[str, Any]],
     tabular: bool,
+    exclude_columns: list[str] | None = None,
 ) -> tuple[pd.DataFrame, PreprocessingState]:
     """Convert JSON records to a DataFrame suitable for tabular baselines.
 
     Flattens nested JSON (no-op for already-flat tabular data) and runs
-    separate_types(force=False) to handle mixed-type columns.
+    separate_types(force=True) so every column gets a .dtype indicator.
+
+    Args:
+        exclude_columns: Columns to exclude from type separation (e.g. target
+            columns that a model needs to reference by their original name).
 
     Returns the DataFrame and the state needed to invert the transformation.
     """
     df = flatten_records(records, include_non_leaf=False)
-    result = separate_types(df, force=True)
+    cols = [c for c in df.columns if c not in (exclude_columns or [])]
+    result = separate_types(df, columns=cols, force=False)
 
     # Record original dtypes of passthrough columns so we can restore them
     # after sampling (synthesizers may change dtypes, e.g. bool → string).

@@ -172,7 +172,9 @@ def sample_dataset(
     if not tabular:
         generate_kwargs["allow_complex_values"] = True
     generate_kwargs.setdefault("device", _resolve_sampling_device())
-    generate_kwargs.update(sample_kwargs)
+    # Filter out dotted keys (e.g. "training.num_epochs") that are training
+    # overrides, not valid generate() kwargs.
+    generate_kwargs.update({k: v for k, v in sample_kwargs.items() if "." not in k})
 
     output_paths: list[Path] = []
     for i in range(1, replicates + 1):

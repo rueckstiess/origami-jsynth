@@ -79,6 +79,9 @@ def prepare_dataset(
         print(f"Data already prepared at {data_dir}")
         return data_dir
 
+    if info.hf_path is None and info.name == "diagnostic":
+        return _prepare_diagnostic(info, data_dir, dcr=dcr, seed=seed)
+
     if info.hf_path is None:
         # Yelp: manual download required
         return _prepare_yelp(info, data_dir, dcr=dcr, seed=seed)
@@ -146,6 +149,30 @@ def _prepare_yelp(
                     attrs[k] = ast.literal_eval(v)
                 except (ValueError, SyntaxError):
                     pass  # keep as string if not a valid Python literal
+
+    ratio = 0.5 if dcr else info.split_ratio
+    train_records, test_records = _split_records(records, ratio, seed=seed)
+    print(f"Split: {len(train_records)} train / {len(test_records)} test")
+
+    save_jsonl(train_records, data_dir / "train.jsonl")
+    save_jsonl(test_records, data_dir / "test.jsonl")
+    print(f"Saved to {data_dir}")
+    return data_dir
+
+
+def _prepare_diagnostic(
+    info: DatasetInfo,
+    data_dir: Path,
+    *,
+    dcr: bool = False,
+    seed: int = 42,
+) -> Path:
+    """Generate the diagnostic benchmark dataset locally."""
+    from scripts.diagnostic import generate_records
+
+    n = 10_000
+    print(f"Generating diagnostic dataset ({n} records, seed={seed})...")
+    records = generate_records(n, seed=seed)
 
     ratio = 0.5 if dcr else info.split_ratio
     train_records, test_records = _split_records(records, ratio, seed=seed)

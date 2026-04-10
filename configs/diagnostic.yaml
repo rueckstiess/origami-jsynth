@@ -1,0 +1,36 @@
+data:
+  max_vocab_size: 0
+  cat_threshold: 128
+  numeric_mode: scale
+  infer_schema: true
+  n_bins: 100
+  model_array_lengths: false
+model:
+  backbone: cached_transformer
+  d_model: 64
+  n_heads: 4
+  n_layers: 8
+  d_ff: 512
+  dropout: 0.0
+  kvpe_pooling: sum
+  num_mixture_components: 5
+  continuous_loss_weight: -1
+training:
+  batch_size: 64
+  learning_rate: 0.0005
+  mixed_precision: "no"
+  dataloader_num_workers: 0
+  num_epochs: 100
+  warmup_steps: 500
+  lr_scheduler: cosine
+  lr_cosine_exponent: 2.0
+  shuffle_keys: true
+  eval_strategy: steps
+  eval_steps: 1000
+  eval_sample_size: 500
+  target_loss_weight: 1.0
+  constrain_grammar: true
+  constrain_schema: true
+inference:
+  constrain_grammar: true
+  constrain_schema: true

@@ -19,8 +19,8 @@ import numpy as np
 import pandas as pd
 import torch
 
-from ..evaluation.flatten import flatten_records, unflatten_dataframe
-from ..evaluation.type_separation import merge_types, separate_types
+from ..evaluation.type_separation import merge_types
+from ._preprocessing import PreprocessingState, dataframe_to_records, records_to_dataframe
 
 _DEFAULTS: dict[str, Any] = {
     "steps": 8000,
@@ -220,8 +220,7 @@ class TabDiffAdapter:
         self.kwargs = {**_DEFAULTS, **kwargs}
 
         # State set during fit()
-        self._is_nested: bool = not tabular
-        self._column_map: dict[str, list[str]] | None = None
+        self._state: PreprocessingState | None = None
         self._info: dict | None = None
         self._data_dir: str | None = None
         self._save_dir: str | None = None
@@ -256,7 +255,8 @@ class TabDiffAdapter:
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
         # Step 1: Convert records to DataFrame with type separation
-        df = self._prepare_dataframe(records)
+        exclude = [self.target_column]
+        df, self._state = records_to_dataframe(records, self.tabular, exclude_columns=exclude)
 
         # Step 2: Split into train/test (TabDiff requires both)
         n_train = int(len(df) * 0.9)
@@ -411,19 +411,18 @@ class TabDiffAdapter:
             sample_batch_size=sample_batch_size,
         )
 
-        # Reverse type separation (column_map=None triggers auto-inference)
-        syn_df = merge_types(syn_df, column_map=self._column_map)
+        # TabDiff's _clean_data replaces NaN with the literal string "nan" in
+        # categorical columns. Restore actual NaN before dataframe_to_records,
+        # since with force=False nullable cat columns may not be type-separated.
+        for col in syn_df.select_dtypes(include="object").columns:
+            syn_df[col] = syn_df[col].replace("nan", np.nan)
 
-        # Unflatten if nested
-        if self._is_nested:
-            return unflatten_dataframe(syn_df)
-        return syn_df.to_dict(orient="records")
+        return dataframe_to_records(syn_df, self._state)
 
     def save(self, path: Path) -> None:
         path.mkdir(parents=True, exist_ok=True)
         meta = {
-            "is_nested": self._is_nested,
-            "column_map": self._column_map,
+            "state": self._state,
             "info": self._info,
             "data_dir": self._data_dir,
             "save_dir": self._save_dir,
@@ -442,8 +441,10 @@ class TabDiffAdapter:
             meta = pickle.load(f)
 
         adapter = cls(tabular=meta.get("tabular", tabular))
-        adapter._is_nested = meta["is_nested"]
-        adapter._column_map = meta["column_map"]
+        adapter._state = meta.get("state") or PreprocessingState(
+            is_nested=meta.get("is_nested", not tabular),
+            column_map=meta.get("column_map", {}),
+        )
         adapter._info = meta["info"]
         adapter._dataset_name = meta["dataset_name"]
         adapter.target_column = meta["target_column"]
@@ -456,24 +457,3 @@ class TabDiffAdapter:
         adapter._save_dir = work_dir
         adapter._data_dir = os.path.join(work_dir, "data", adapter._dataset_name)
         return adapter
-
-    # -------------------------------------------------------------------
-    # Internal helpers
-    # -------------------------------------------------------------------
-
-    def _prepare_dataframe(self, records: list[dict[str, Any]]) -> pd.DataFrame:
-        """Convert JSONL records to a flat DataFrame with type separation.
-
-        Excludes the target column from type separation so it stays as a
-        single column compatible with TabDiff's target handling.
-        """
-        if self._is_nested:
-            df = flatten_records(records, include_non_leaf=False)
-        else:
-            df = pd.DataFrame(records)
-
-        # Apply type separation to all columns except target
-        cols_to_separate = [c for c in df.columns if c != self.target_column]
-        result = separate_types(df, columns=cols_to_separate, force=True)
-        self._column_map = result.column_map
-        return result.df
