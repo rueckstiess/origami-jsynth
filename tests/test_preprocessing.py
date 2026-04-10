@@ -1,18 +1,12 @@
 """Tests for origami_jsynth.baselines._preprocessing."""
 
-import math
-
 import pandas as pd
-import pytest
 
 from origami_jsynth.baselines._preprocessing import (
     PreprocessingState,
     dataframe_to_records,
     records_to_dataframe,
 )
-
-
-
 
 # ---------------------------------------------------------------------------
 # TestRecordsToDataframe
@@ -154,10 +148,10 @@ class TestRoundtrip:
         result = dataframe_to_records(df, state)
         assert len(result) == 2
         # Key fields should survive.
-        for orig, restored in zip(records, result):
-            assert orig["age"] == restored.get("age") or any(
-                "age" in k for k in restored
-            ), f"age missing in {restored}"
+        for orig, restored in zip(records, result, strict=True):
+            assert orig["age"] == restored.get("age") or any("age" in k for k in restored), (
+                f"age missing in {restored}"
+            )
 
     def test_nested_records_roundtrip(self):
         records = [
@@ -171,7 +165,7 @@ class TestRoundtrip:
 
     def test_empty_arrays_roundtrip(self):
         # Regression test: empty arrays must survive flatten/unflatten, not become absent fields.
-        # Records with empty arrays must survive the full records_to_dataframe → dataframe_to_records
+        # Records with empty arrays must survive the full preprocessing
         # pipeline. This is the regression test for the _unflatten_leaf_only bug fix.
         #
         # The fix in _unflatten_leaf_only works by detecting array-parent paths and setting them
@@ -246,9 +240,7 @@ class TestSynthesizerOutputHandling:
         # Simulate synthesizer returning string-encoded booleans.
         if "active.bool" in df.columns:
             df = df.copy()
-            df["active.bool"] = df["active.bool"].map(
-                {True: "True", False: "False", 1.0: "True", 0.0: "False"}
-            )
+            df["active.bool"] = df["active.bool"].map({True: "True", False: "False"})
         else:
             df = df.copy()
             df["active"] = df["active"].map({True: "True", False: "False"})

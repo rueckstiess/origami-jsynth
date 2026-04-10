@@ -21,7 +21,6 @@ import pytest
 
 from origami_jsynth.baselines._preprocessing import dataframe_to_records, records_to_dataframe
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -33,15 +32,17 @@ def type_check_records():
     rng = random.Random(42)
     records = []
     for _ in range(80):
-        records.append({
-            "age": rng.randint(18, 80),
-            "income": round(rng.uniform(20000, 100000), 2),
-            "category": rng.choice(["A", "B", "C"]),
-            "active": rng.choice([True, False]),                              # bool
-            "has_feature": rng.choice([True, False]),                         # bool
-            "reason": rng.choice([None, None, None, "spam", "resolved"]),     # nullable cat
-            "score": rng.choice([None, round(rng.uniform(0, 1), 4)]),         # nullable num
-        })
+        records.append(
+            {
+                "age": rng.randint(18, 80),
+                "income": round(rng.uniform(20000, 100000), 2),
+                "category": rng.choice(["A", "B", "C"]),
+                "active": rng.choice([True, False]),  # bool
+                "has_feature": rng.choice([True, False]),  # bool
+                "reason": rng.choice([None, None, None, "spam", "resolved"]),  # nullable cat
+                "score": rng.choice([None, round(rng.uniform(0, 1), 4)]),  # nullable num
+            }
+        )
     return records
 
 
@@ -126,7 +127,11 @@ class TestTabDiffOutputFormat:
 
     def test_exclude_columns_preserves_target(self, type_check_records):
         # TabDiff excludes target from type separation.
-        df, state = records_to_dataframe(type_check_records, tabular=True, exclude_columns=["category"])
+        df, state = records_to_dataframe(
+            type_check_records,
+            tabular=True,
+            exclude_columns=["category"],
+        )
         assert "category" in df.columns
         assert "category.dtype" not in df.columns
 
@@ -168,13 +173,17 @@ class TestSDVOutputFormat:
     def test_both_bool_formats_produce_correct_types(self, type_check_records):
         df, state = records_to_dataframe(type_check_records, tabular=True)
         for simulate in [
-            lambda d: d.assign(**{c: d[c].astype(object).map(str)
-                                  for c in d.columns if pd.api.types.is_bool_dtype(d[c])}),
-            lambda d: d.assign(**{c: d[c].astype("float64")
-                                  for c in d.columns if pd.api.types.is_bool_dtype(d[c])}),
+            lambda d: d.assign(
+                **{
+                    c: d[c].astype(object).map(str)
+                    for c in d.columns
+                    if pd.api.types.is_bool_dtype(d[c])
+                }
+            ),
+            lambda d: d.assign(
+                **{c: d[c].astype("float64") for c in d.columns if pd.api.types.is_bool_dtype(d[c])}
+            ),
         ]:
             df_synth = simulate(df.copy())
             result = dataframe_to_records(df_synth, state)
             check_types(result)
-
-

@@ -70,10 +70,7 @@ def sample_parallel(
             seed_lines = ""
             if seed is not None:
                 worker_seed = seed + i
-                seed_lines = (
-                    "import torch\n"
-                    f"torch.manual_seed({worker_seed})\n"
-                )
+                seed_lines = f"import torch\ntorch.manual_seed({worker_seed})\n"
             script = (
                 "import json\n"
                 f"{seed_lines}"

@@ -19,7 +19,6 @@ import numpy as np
 import pandas as pd
 import torch
 
-from ..evaluation.type_separation import merge_types
 from ._preprocessing import PreprocessingState, dataframe_to_records, records_to_dataframe
 
 _DEFAULTS: dict[str, Any] = {
@@ -40,9 +39,7 @@ def _classify_columns(
 ) -> tuple[list[int], list[int], list[int]]:
     columns = list(df.columns)
     if target_column not in columns:
-        raise ValueError(
-            f"Target column '{target_column}' not found. Available: {columns}"
-        )
+        raise ValueError(f"Target column '{target_column}' not found. Available: {columns}")
     target_idx = [columns.index(target_column)]
     num_col_idx = []
     cat_col_idx = []
@@ -195,7 +192,11 @@ def _save_npy_files(
     target_columns: list[str],
 ) -> None:
     for split_name, df in [("train", train_df), ("test", test_df)]:
-        X_num = df[num_columns].to_numpy().astype(np.float32) if num_columns else np.empty((len(df), 0), dtype=np.float32)
+        X_num = (
+            df[num_columns].to_numpy().astype(np.float32)
+            if num_columns
+            else np.empty((len(df), 0), dtype=np.float32)
+        )
         X_cat = df[cat_columns].to_numpy() if cat_columns else np.empty((len(df), 0), dtype=object)
         y = df[target_columns].to_numpy()
         np.save(os.path.join(save_dir, f"X_num_{split_name}.npy"), X_num)
@@ -265,9 +266,7 @@ class TabDiffAdapter:
 
         # Step 3: Classify columns
         columns = list(df.columns)
-        num_col_idx, cat_col_idx, target_col_idx = _classify_columns(
-            df, self.target_column
-        )
+        num_col_idx, cat_col_idx, target_col_idx = _classify_columns(df, self.target_column)
         num_columns = [columns[i] for i in num_col_idx]
         cat_columns = [columns[i] for i in cat_col_idx]
         target_columns = [columns[i] for i in target_col_idx]
@@ -281,9 +280,7 @@ class TabDiffAdapter:
         test_df = _clean_data(test_df, cat_columns, target_columns, self.task_type)
 
         # Step 5: Compute metadata
-        tabdiff_task_type = _get_tabdiff_task_type(
-            self.task_type, train_df[self.target_column]
-        )
+        tabdiff_task_type = _get_tabdiff_task_type(self.task_type, train_df[self.target_column])
         int_col_idx, int_columns, int_col_idx_wrt_num = _compute_int_columns(
             train_df, test_df, num_col_idx, columns
         )
@@ -298,12 +295,8 @@ class TabDiffAdapter:
         os.makedirs(data_dir, exist_ok=True)
 
         # CSVs
-        train_df.to_csv(
-            os.path.join(data_dir, f"{self._dataset_name}_train.csv"), index=False
-        )
-        test_df.to_csv(
-            os.path.join(data_dir, f"{self._dataset_name}_test.csv"), index=False
-        )
+        train_df.to_csv(os.path.join(data_dir, f"{self._dataset_name}_train.csv"), index=False)
+        test_df.to_csv(os.path.join(data_dir, f"{self._dataset_name}_test.csv"), index=False)
 
         # .npy files
         _save_npy_files(data_dir, train_df, test_df, num_columns, cat_columns, target_columns)
@@ -342,7 +335,15 @@ class TabDiffAdapter:
 
         # Step 8: Build config overrides from kwargs
         config_overrides = {}
-        for key in ("steps", "batch_size", "lr", "check_val_every", "sample_batch_size", "clip_gradients"):
+        override_keys = (
+            "steps",
+            "batch_size",
+            "lr",
+            "check_val_every",
+            "sample_batch_size",
+            "clip_gradients",
+        )
+        for key in override_keys:
             if key in self.kwargs:
                 config_overrides[key] = self.kwargs[key]
 

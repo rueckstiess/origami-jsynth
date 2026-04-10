@@ -133,9 +133,7 @@ def dataframe_to_records(
             and (merged[col].dtype == object or isinstance(merged[col].dtype, pd.StringDtype))
             and merged[col].dropna().isin(["True", "False", True, False]).all()
         ):
-            merged[col] = merged[col].map(
-                {"True": True, "False": False, True: True, False: False}
-            )
+            merged[col] = merged[col].map({"True": True, "False": False, True: True, False: False})
 
     if not state.is_nested:
         return merged.to_dict(orient="records")

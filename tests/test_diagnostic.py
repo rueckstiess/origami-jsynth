@@ -1,10 +1,9 @@
 """Tests for the diagnostic benchmark dataset generator."""
 
-import numpy as np
 import pandas as pd
 import pytest
 
-from scripts.diagnostic import generate_records, audit_synthetic
+from scripts.diagnostic import audit_synthetic, generate_records
 
 
 class TestGenerateRecords:
@@ -21,22 +20,51 @@ class TestGenerateRecords:
 
     def test_all_columns_present(self, df):
         expected = {
-            "cont_a", "cont_b", "cont_c", "int_count", "int_rating",
-            "cat_group", "cat_level", "cat_region", "bool_flag", "bool_active",
-            "bool_nullable", "cont_conditional", "cat_nullable", "int_sparse",
-            "cont_interaction", "mixed_value", "target",
+            "cont_a",
+            "cont_b",
+            "cont_c",
+            "int_count",
+            "int_rating",
+            "cat_group",
+            "cat_level",
+            "cat_region",
+            "bool_flag",
+            "bool_active",
+            "bool_nullable",
+            "cont_conditional",
+            "cat_nullable",
+            "int_sparse",
+            "cont_interaction",
+            "mixed_value",
+            "target",
         }
         assert expected == set(df.columns)
 
     def test_dense_columns_no_missing(self, df):
-        dense = ["cont_a", "cont_b", "int_count", "cat_group", "cat_level",
-                 "bool_flag", "bool_active", "cont_interaction", "target"]
+        dense = [
+            "cont_a",
+            "cont_b",
+            "int_count",
+            "cat_group",
+            "cat_level",
+            "bool_flag",
+            "bool_active",
+            "cont_interaction",
+            "target",
+        ]
         for col in dense:
             assert df[col].isna().sum() == 0, f"{col} has unexpected NaN"
 
     def test_sparse_columns_have_missing(self, df):
-        sparse = ["cont_c", "int_rating", "cat_region", "int_sparse",
-                  "bool_nullable", "cont_conditional", "cat_nullable"]
+        sparse = [
+            "cont_c",
+            "int_rating",
+            "cat_region",
+            "int_sparse",
+            "bool_nullable",
+            "cont_conditional",
+            "cat_nullable",
+        ]
         for col in sparse:
             assert df[col].isna().sum() > 0, f"{col} has no NaN"
 

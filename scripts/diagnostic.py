@@ -6,7 +6,7 @@ Generate a dataset with known ground-truth correlations, mixed types
 Audit synthetic data against those ground-truth properties.
 
 Usage:
-    python scripts/diagnostic.py generate [--output-dir results/diagnostic/data] [--seed 42] [--n 10000]
+    python scripts/diagnostic.py generate [--output-dir DIR] [--seed 42]
     python scripts/diagnostic.py audit results/diagnostic/ctgan/samples/synthetic_1.jsonl
 """
 
@@ -18,7 +18,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
 
 N_TOTAL = 10_000
 SPLIT_RATIO = 0.9
@@ -73,12 +72,8 @@ def generate_records(n: int, seed: int = SEED) -> list[dict]:
 
     # cat_region: Z4-dependent multinomial over 50 region codes
     region_rng = np.random.default_rng(seed + 1)
-    region_probs = {
-        code: region_rng.dirichlet(np.ones(50) * 0.5) for code in ["A", "B", "C"]
-    }
-    cat_region = np.array(
-        [rng.choice(REGION_NAMES, p=region_probs[z4]) for z4 in Z4_codes]
-    )
+    region_probs = {code: region_rng.dirichlet(np.ones(50) * 0.5) for code in ["A", "B", "C"]}
+    cat_region = np.array([rng.choice(REGION_NAMES, p=region_probs[z4]) for z4 in Z4_codes])
 
     # cat_nullable: simple 3-way
     cat_nullable_base = rng.choice(["yes", "no", "maybe"], size=n)
@@ -97,12 +92,7 @@ def generate_records(n: int, seed: int = SEED) -> list[dict]:
 
     # --- Target ---
     logit = (
-        0.8 * Z1
-        - 0.6 * Z2
-        + 1.2 * (Z4_codes == "C").astype(float)
-        + 0.5 * Z3
-        + 0.3 * Z1 * Z2
-        - 0.3
+        0.8 * Z1 - 0.6 * Z2 + 1.2 * (Z4_codes == "C").astype(float) + 0.5 * Z3 + 0.3 * Z1 * Z2 - 0.3
     )
     p_target = sigmoid(logit)
     target = np.where(rng.uniform(size=n) < p_target, "positive", "negative")
@@ -169,10 +159,23 @@ def verify(records: list[dict]) -> None:
     # --- Missing rates ---
     print("\n--- Missing rates ---")
     all_cols = [
-        "cont_a", "cont_b", "cont_c", "int_count", "int_rating",
-        "cat_group", "cat_level", "cat_region", "bool_flag", "bool_active",
-        "bool_nullable", "cont_conditional", "cat_nullable", "int_sparse",
-        "cont_interaction", "mixed_value", "target",
+        "cont_a",
+        "cont_b",
+        "cont_c",
+        "int_count",
+        "int_rating",
+        "cat_group",
+        "cat_level",
+        "cat_region",
+        "bool_flag",
+        "bool_active",
+        "bool_nullable",
+        "cont_conditional",
+        "cat_nullable",
+        "int_sparse",
+        "cont_interaction",
+        "mixed_value",
+        "target",
     ]
     for col in all_cols:
         if col in df.columns:
@@ -268,10 +271,23 @@ def audit_synthetic(
     # ---- 1. Column presence ----
     print("\n--- Column presence ---")
     expected_cols = {
-        "cont_a", "cont_b", "cont_c", "int_count", "int_rating",
-        "cat_group", "cat_level", "cat_region", "bool_flag", "bool_active",
-        "bool_nullable", "cont_conditional", "cat_nullable", "int_sparse",
-        "cont_interaction", "mixed_value", "target",
+        "cont_a",
+        "cont_b",
+        "cont_c",
+        "int_count",
+        "int_rating",
+        "cat_group",
+        "cat_level",
+        "cat_region",
+        "bool_flag",
+        "bool_active",
+        "bool_nullable",
+        "cont_conditional",
+        "cat_nullable",
+        "int_sparse",
+        "cont_interaction",
+        "mixed_value",
+        "target",
     }
     syn_cols = set(syn.columns)
     missing_cols = expected_cols - syn_cols
@@ -310,18 +326,26 @@ def audit_synthetic(
     # ---- 3. Missing value rates ----
     print("\n--- Missing value rates ---")
     expected_missing = {
-        "cont_a": 0.0, "cont_b": 0.0, "int_count": 0.0,
-        "cat_group": 0.0, "cat_level": 0.0, "bool_flag": 0.0,
-        "bool_active": 0.0, "cont_interaction": 0.0, "target": 0.0,
-        "cont_c": 0.20, "int_rating": 0.15, "cat_region": 0.25,
-        "int_sparse": 0.30, "bool_nullable": 0.25, "mixed_value": 0.0,
-        "cont_conditional": 0.50, "cat_nullable": 0.70,
+        "cont_a": 0.0,
+        "cont_b": 0.0,
+        "int_count": 0.0,
+        "cat_group": 0.0,
+        "cat_level": 0.0,
+        "bool_flag": 0.0,
+        "bool_active": 0.0,
+        "cont_interaction": 0.0,
+        "target": 0.0,
+        "cont_c": 0.20,
+        "int_rating": 0.15,
+        "cat_region": 0.25,
+        "int_sparse": 0.30,
+        "bool_nullable": 0.25,
+        "mixed_value": 0.0,
+        "cont_conditional": 0.50,
+        "cat_nullable": 0.70,
     }
     for col, expected_rate in expected_missing.items():
-        if col not in syn.columns:
-            actual = 1.0
-        else:
-            actual = syn[col].isna().mean()
+        actual = 1.0 if col not in syn.columns else syn[col].isna().mean()
         close = abs(actual - expected_rate) < tolerance
         # Dense columns that should have 0% missing are stricter
         if expected_rate == 0.0:
@@ -342,8 +366,7 @@ def audit_synthetic(
         check(
             "cond_miss_cont_conditional",
             alpha_miss > other_miss + 0.2,
-            f"alpha NaN={alpha_miss:.1%}, non-alpha NaN={other_miss:.1%} "
-            f"(real: 100% vs 0%)",
+            f"alpha NaN={alpha_miss:.1%}, non-alpha NaN={other_miss:.1%} (real: 100% vs 0%)",
         )
     else:
         check("cond_miss_cont_conditional", False, "required columns missing")
@@ -354,8 +377,7 @@ def audit_synthetic(
         check(
             "cond_miss_cat_nullable",
             inactive_miss > active_miss + 0.2,
-            f"inactive NaN={inactive_miss:.1%}, active NaN={active_miss:.1%} "
-            f"(real: 100% vs 0%)",
+            f"inactive NaN={inactive_miss:.1%}, active NaN={active_miss:.1%} (real: 100% vs 0%)",
         )
     else:
         check("cond_miss_cat_nullable", False, "required columns missing")
@@ -494,8 +516,12 @@ def main():
     # --- audit ---
     aud = sub.add_parser("audit", help="Audit synthetic data against ground truth")
     aud.add_argument("synthetic", type=Path, help="Path to synthetic JSONL file")
-    aud.add_argument("--real", type=Path, default=Path("results/diagnostic/data/train.jsonl"),
-                     help="Path to real train.jsonl")
+    aud.add_argument(
+        "--real",
+        type=Path,
+        default=Path("results/diagnostic/data/train.jsonl"),
+        help="Path to real train.jsonl",
+    )
     aud.add_argument("--tolerance", type=float, default=0.10)
 
     args = parser.parse_args()
@@ -504,7 +530,8 @@ def main():
         if not str(args.synthetic).endswith(".jsonl"):
             parser.error(
                 f"Expected a .jsonl file, got: {args.synthetic}\n"
-                f"Hint: use the synthetic samples file, e.g. results/diagnostic/ctgan/samples/synthetic_1.jsonl"
+                "Hint: use the synthetic samples file, e.g. "
+                "results/diagnostic/ctgan/samples/synthetic_1.jsonl"
             )
         syn_records = load_jsonl(args.synthetic)
         real_records = load_jsonl(args.real) if args.real else None
