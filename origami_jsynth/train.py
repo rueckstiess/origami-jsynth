@@ -70,7 +70,6 @@ class WandbCallback(TrainerCallback):
         import wandb
 
         self.run = wandb.init(
-            entity="relcon-ai",
             project=self.project,
             name=self.name,
             id=self.run_id,

@@ -356,7 +356,6 @@ class TabDiffAdapter:
             import wandb as _wandb
 
             _wandb.init(
-                entity="relcon-ai",
                 project="origami-jsynth",
                 name=f"tabdiff-{dataset}" if dataset else "tabdiff",
                 config=config_overrides or self.kwargs,
