@@ -23,9 +23,10 @@ _NOOP_SYNC = patch(
 class TestComboGeneration:
     def test_no_oom_combos_in_list(self):
         for dcr in (False, True):
-            combos = _build_combos(dcr)
-            for model, dataset, _dcr in combos:
-                assert (model, dataset) not in SKIP_OOM
+            for reverse in (False, True):
+                combos = _build_combos(dcr, reverse=reverse)
+                for model, dataset, _dcr in combos:
+                    assert (model, dataset) not in SKIP_OOM
 
     def test_base_combos_all_have_dcr_false(self):
         combos = _build_combos(False)
@@ -48,6 +49,13 @@ class TestComboGeneration:
         non_oom = len(SUITE_MODELS) * len(SUITE_DATASETS) - len(SKIP_OOM)
         assert len(_build_combos(False)) == non_oom
         assert len(_build_combos(True)) == non_oom
+
+    def test_reverse_produces_same_set_different_order(self):
+        fwd = _build_combos(False, reverse=False)
+        rev = _build_combos(False, reverse=True)
+        assert set(fwd) == set(rev)
+        assert fwd != rev
+        assert fwd[0] == rev[-1]  # first forward == last reversed
 
     def test_all_models_and_datasets_represented(self):
         combos = _build_combos(False)

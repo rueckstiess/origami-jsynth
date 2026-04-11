@@ -741,6 +741,7 @@ def cmd_full_suite(args: argparse.Namespace) -> None:
 
     status = run_full_suite(
         dcr=args.dcr,
+        reverse=args.reverse,
         output_dir=args.output_dir,
         remote=getattr(args, "remote", None),
         replicates=args.replicates,
@@ -916,6 +917,11 @@ def main() -> None:
         "--no-wandb",
         action="store_true",
         help="Disable Weights & Biases logging",
+    )
+    p_suite.add_argument(
+        "--reverse",
+        action="store_true",
+        help="Reverse iteration order: github_issues→adult, origami→tvae",
     )
     p_suite.set_defaults(func=cmd_full_suite)
 

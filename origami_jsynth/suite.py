@@ -84,11 +84,13 @@ def _build_args(
     )
 
 
-def _build_combos(dcr: bool) -> list[tuple[str, str, bool]]:
+def _build_combos(dcr: bool, reverse: bool = False) -> list[tuple[str, str, bool]]:
     """Return (model, dataset, dcr) triples for all non-OOM combos in *dcr* mode."""
+    datasets = list(reversed(SUITE_DATASETS)) if reverse else SUITE_DATASETS
+    models = list(reversed(SUITE_MODELS)) if reverse else SUITE_MODELS
     combos = []
-    for dataset in reversed(SUITE_DATASETS):
-        for model in reversed(SUITE_MODELS):
+    for dataset in datasets:
+        for model in models:
             if (model, dataset) in SKIP_OOM:
                 continue
             combos.append((model, dataset, dcr))
@@ -97,6 +99,7 @@ def _build_combos(dcr: bool) -> list[tuple[str, str, bool]]:
 
 def run_full_suite(
     dcr: bool = False,
+    reverse: bool = False,
     output_dir: str = "./results",
     remote: str | None = None,
     replicates: int = 10,
@@ -109,11 +112,12 @@ def run_full_suite(
     When ``dcr=False`` (default): runs base experiments and evaluates
     fidelity, utility, and detection.
     When ``dcr=True``: runs DCR experiments and evaluates privacy only.
+    When ``reverse=True``: iterates github_issues→adult and origami→tvae.
 
     Returns a status dict mapping (model, dataset, dcr) to one of:
     ``"completed"``, ``"skipped_oom"``, ``"skipped_done"``, ``"failed"``.
     """
-    combos = _build_combos(dcr)
+    combos = _build_combos(dcr, reverse=reverse)
     total = len(combos)
 
     status: dict[tuple[str, str, bool], str] = {}
