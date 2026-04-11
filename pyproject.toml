@@ -22,6 +22,7 @@ dependencies = [
 [project.optional-dependencies]
 wandb = ["wandb"]
 yanex = ["yanex"]
+aws = ["awscli"]
 baselines = [
     "sdv>=1.0",
     "be-great>=0.0.5",
