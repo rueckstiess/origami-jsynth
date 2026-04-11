@@ -74,6 +74,7 @@ class WandbCallback(TrainerCallback):
             name=self.name,
             id=self.run_id,
             resume="allow",
+            reinit="finish_previous",
             config=self.config,
             group=self.group,
             job_type="train",
