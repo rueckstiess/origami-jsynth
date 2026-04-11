@@ -57,11 +57,6 @@ packages = ["origami_jsynth", "vendor/tabdiff/tabdiff"]
 # For Linux aarch64 (DGX Spark) PyPI only provides a CPU-only wheel, so we
 # point uv at the PyTorch CUDA 13.0 index explicitly for that platform.
 # macOS falls through to PyPI and gets the default (CPU/MPS) wheel.
-[[tool.uv.index]]
-name = "pytorch-cu130"
-url = "https://download.pytorch.org/whl/cu130"
-explicit = true
-
 [tool.uv]
 # mostlyai-engine declares torch<2.10 but works fine at runtime with newer versions.
 # Override to allow torch 2.11 which has Blackwell/aarch64 CUDA improvements.
@@ -70,11 +65,6 @@ environments = [
     "sys_platform == 'darwin'",
     "sys_platform == 'linux' and platform_machine == 'x86_64'",
     "sys_platform == 'linux' and platform_machine == 'aarch64'",
-]
-
-[tool.uv.sources]
-torch = [
-    { index = "pytorch-cu130", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
 ]
 
 [tool.ruff]
