@@ -41,6 +41,30 @@ V100_OVERRIDES: dict[tuple[str, str], dict] = {
         "train_params": ["batch_size=512", "check_val_every=20"],
         "sample_params": ["sample_batch_size=512"],
     },
+    ("origami", "adult"): {
+        "train_params": ["training.dataloader_num_workers=12"],
+        "sample_params": ["num_workers=12"],
+    },
+    ("origami", "diabetes"): {
+        "train_params": ["training.dataloader_num_workers=12"],
+        "sample_params": ["num_workers=12"],
+    },
+    ("origami", "electric_vehicles"): {
+        "train_params": ["training.dataloader_num_workers=12"],
+        "sample_params": ["num_workers=12"],
+    },
+    ("origami", "yelp"): {
+        "train_params": ["training.dataloader_num_workers=12"],
+        "sample_params": ["num_workers=12"],
+    },
+    ("origami", "ddxplus"): {
+        "train_params": ["training.dataloader_num_workers=12"],
+        "sample_params": ["num_workers=12"],
+    },
+    ("origami", "github_issues"): {
+        "train_params": ["training.dataloader_num_workers=12"],
+        "sample_params": ["num_workers=12"],
+    },
 }
 
 
