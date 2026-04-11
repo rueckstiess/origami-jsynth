@@ -188,6 +188,7 @@ def cmd_train(args: argparse.Namespace) -> None:
     if use_wandb:
         import os
 
+        os.environ.setdefault("WANDB_ENTITY", "relcon-ai")
         os.environ.setdefault("WANDB_PROJECT", "origami-jsynth")
 
     with _sync_context(args):
