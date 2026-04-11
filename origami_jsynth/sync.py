@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -78,15 +79,13 @@ class RemoteSync:
     def _sync(self) -> None:
         """Run aws s3 sync (best-effort, never raises)."""
         try:
+            # Newer botocore enables CRC checksums by default, wrapping
+            # uploads in a non-seekable AwsChunkedWrapper that can't be
+            # rewound on retry.  Use env var (works across CLI versions).
+            env = {**os.environ, "AWS_REQUEST_CHECKSUM_CALCULATION": "when_required"}
             cp = subprocess.run(
-                [
-                    "aws", "s3", "sync", self.local_dir, self.remote_url,
-                    # Newer botocore enables CRC checksums by default, wrapping
-                    # uploads in a non-seekable AwsChunkedWrapper that can't be
-                    # rewound on retry.  Setting this to "when_required" disables
-                    # the default checksum so large file retries work correctly.
-                    "--request-checksum-calculation", "when_required",
-                ],
+                ["aws", "s3", "sync", self.local_dir, self.remote_url],
+                env=env,
                 capture_output=True,
                 text=True,
             )
