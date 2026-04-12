@@ -29,6 +29,9 @@ SKIP_OOM: set[tuple[str, str]] = {
 # V100-specific param overrides per (model, dataset).
 # train_params / sample_params are "KEY=VALUE" strings (same format as --param).
 V100_OVERRIDES: dict[tuple[str, str], dict] = {
+    ("realtabformer", "yelp"): {
+        "train_params": ["n_critic=0", "train_size=0.9"],
+    },
     ("tabdiff", "yelp"): {
         "train_params": ["batch_size=512", "check_val_every=20"],
         "sample_params": ["sample_batch_size=512"],
@@ -66,6 +69,22 @@ V100_OVERRIDES: dict[tuple[str, str], dict] = {
         "sample_params": ["num_workers=12"],
     },
 }
+
+
+def _finish_wandb() -> None:
+    """Finish any active wandb run.
+
+    Why: HF Trainer-based baselines (realtabformer, great) auto-init a wandb
+    run via ``report_to=["wandb"]`` but don't always finalize it, so the next
+    combo in the suite loop inherits the open run and writes into the wrong
+    log file.
+    """
+    try:
+        import wandb
+    except ImportError:
+        return
+    if wandb.run is not None:
+        wandb.finish()
 
 
 def _is_combo_complete(output_dir: str, model: str, dataset: str, dcr: bool) -> bool:
@@ -187,6 +206,8 @@ def run_full_suite(
             except Exception:
                 traceback.print_exc()
                 status[(model, dataset, dcr)] = "failed"
+            finally:
+                _finish_wandb()
 
     _print_summary(status)
     return status
