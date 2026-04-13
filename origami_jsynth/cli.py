@@ -739,6 +739,11 @@ def cmd_full_suite(args: argparse.Namespace) -> None:
     """Run all model+dataset combos in base or DCR mode with V100 overrides."""
     from .suite import run_full_suite
 
+    def _split(val: str | None) -> list[str] | None:
+        if not val:
+            return None
+        return [s.strip() for s in val.split(",") if s.strip()]
+
     status = run_full_suite(
         dcr=args.dcr,
         reverse=args.reverse,
@@ -748,6 +753,8 @@ def cmd_full_suite(args: argparse.Namespace) -> None:
         num_workers=args.num_workers,
         no_wandb=getattr(args, "no_wandb", False),
         max_minutes=args.max_minutes,
+        models=_split(getattr(args, "models", None)),
+        datasets=_split(getattr(args, "datasets", None)),
     )
     if any(v == "failed" for v in status.values()):
         sys.exit(1)
@@ -922,6 +929,18 @@ def main() -> None:
         "--reverse",
         action="store_true",
         help="Reverse iteration order: github_issues→adult, origami→tvae",
+    )
+    p_suite.add_argument(
+        "--models",
+        default=None,
+        metavar="M1,M2,...",
+        help="Comma-separated list of models to include (default: all)",
+    )
+    p_suite.add_argument(
+        "--datasets",
+        default=None,
+        metavar="D1,D2,...",
+        help="Comma-separated list of datasets to include (default: all)",
     )
     p_suite.set_defaults(func=cmd_full_suite)
 

@@ -127,13 +127,25 @@ def _build_args(
     )
 
 
-def _build_combos(dcr: bool, reverse: bool = False) -> list[tuple[str, str, bool]]:
-    """Return (model, dataset, dcr) triples for all non-OOM combos in *dcr* mode."""
-    datasets = list(reversed(SUITE_DATASETS)) if reverse else SUITE_DATASETS
-    models = list(reversed(SUITE_MODELS)) if reverse else SUITE_MODELS
+def _build_combos(
+    dcr: bool,
+    reverse: bool = False,
+    models: list[str] | None = None,
+    datasets: list[str] | None = None,
+) -> list[tuple[str, str, bool]]:
+    """Return (model, dataset, dcr) triples for all non-OOM combos in *dcr* mode.
+
+    When *models* or *datasets* is provided, only those are included, in the
+    order given (reversed if *reverse* is true).
+    """
+    sel_datasets = datasets if datasets is not None else SUITE_DATASETS
+    sel_models = models if models is not None else SUITE_MODELS
+    if reverse:
+        sel_datasets = list(reversed(sel_datasets))
+        sel_models = list(reversed(sel_models))
     combos = []
-    for dataset in datasets:
-        for model in models:
+    for dataset in sel_datasets:
+        for model in sel_models:
             if (model, dataset) in SKIP_OOM:
                 continue
             combos.append((model, dataset, dcr))
@@ -149,6 +161,8 @@ def run_full_suite(
     num_workers: int = 4,
     no_wandb: bool = False,
     max_minutes: float | None = None,
+    models: list[str] | None = None,
+    datasets: list[str] | None = None,
 ) -> dict[tuple[str, str, bool], str]:
     """Run all model+dataset combos for *dcr* mode.
 
@@ -160,12 +174,12 @@ def run_full_suite(
     Returns a status dict mapping (model, dataset, dcr) to one of:
     ``"completed"``, ``"skipped_oom"``, ``"skipped_done"``, ``"failed"``.
     """
-    combos = _build_combos(dcr, reverse=reverse)
+    combos = _build_combos(dcr, reverse=reverse, models=models, datasets=datasets)
     total = len(combos)
 
     status: dict[tuple[str, str, bool], str] = {}
-    for model in SUITE_MODELS:
-        for dataset in SUITE_DATASETS:
+    for model in models if models is not None else SUITE_MODELS:
+        for dataset in datasets if datasets is not None else SUITE_DATASETS:
             if (model, dataset) in SKIP_OOM:
                 status[(model, dataset, dcr)] = "skipped_oom"
 
