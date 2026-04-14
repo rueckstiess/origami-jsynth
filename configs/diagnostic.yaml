@@ -19,6 +19,7 @@ training:
   batch_size: 64
   learning_rate: 0.0005
   mixed_precision: "no"
+  use_accelerate: false
   dataloader_num_workers: 0
   num_epochs: 100
   warmup_steps: 500
