@@ -34,15 +34,15 @@ V100_OVERRIDES: dict[tuple[str, str], dict] = {
         "train_params": ["n_critic=0", "train_size=0.9"],
     },
     ("tabdiff", "yelp"): {
-        "train_params": ["batch_size=512", "check_val_every=20"],
+        "train_params": ["batch_size=512", "lr=0.00035", "check_val_every=20"],
         "sample_params": ["sample_batch_size=512"],
     },
     ("tabdiff", "ddxplus"): {
-        "train_params": ["batch_size=512", "check_val_every=20"],
+        "train_params": ["batch_size=512", "lr=0.00035", "check_val_every=20"],
         "sample_params": ["sample_batch_size=512"],
     },
     ("tabdiff", "github_issues"): {
-        "train_params": ["batch_size=512", "check_val_every=20"],
+        "train_params": ["batch_size=512", "lr=0.00035", "check_val_every=20"],
         "sample_params": ["sample_batch_size=512"],
     },
     ("origami", "adult"): {
