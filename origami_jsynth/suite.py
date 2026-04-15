@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
+import sys
 import traceback
 from pathlib import Path
 
-from .cli import cmd_all
 from .sync import RemoteSync
 
 SUITE_DATASETS = ["adult", "diabetes", "electric_vehicles", "yelp", "ddxplus", "github_issues"]
@@ -71,20 +72,41 @@ V100_OVERRIDES: dict[tuple[str, str], dict] = {
 }
 
 
-def _finish_wandb() -> None:
-    """Finish any active wandb run.
+def _namespace_to_argv(args: argparse.Namespace) -> list[str]:
+    """Convert a suite-built Namespace back into argv for `origami-jsynth all`."""
+    argv = [
+        "all",
+        "--dataset", args.dataset,
+        "--model", args.model,
+        "--output-dir", args.output_dir,
+        "--num-workers", str(args.num_workers),
+        "--replicates", str(args.replicates),
+    ]
+    if args.dcr:
+        argv.append("--dcr")
+    if args.no_wandb:
+        argv.append("--no-wandb")
+    if args.max_minutes is not None:
+        argv.extend(["--max-minutes", str(args.max_minutes)])
+    for p in args.param or []:
+        argv.extend(["--param", p])
+    return argv
 
-    Why: HF Trainer-based baselines (realtabformer, great) auto-init a wandb
-    run via ``report_to=["wandb"]`` but don't always finalize it, so the next
-    combo in the suite loop inherits the open run and writes into the wrong
-    log file.
-    """
+
+def _run_combo_subprocess(args: argparse.Namespace) -> int:
+    """Run `origami-jsynth all` as a subprocess, inheriting stdout/stderr."""
+    cmd = [sys.executable, "-m", "origami_jsynth.cli", *_namespace_to_argv(args)]
+    proc = subprocess.Popen(cmd)
     try:
-        import wandb
-    except ImportError:
-        return
-    if wandb.run is not None:
-        wandb.finish()
+        return proc.wait()
+    except KeyboardInterrupt:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+        raise
 
 
 def _is_combo_complete(output_dir: str, model: str, dataset: str, dcr: bool) -> bool:
@@ -206,22 +228,18 @@ def run_full_suite(
                 max_minutes,
             )
             try:
-                cmd_all(args)
-                status[(model, dataset, dcr)] = "completed"
+                rc = _run_combo_subprocess(args)
+                status[(model, dataset, dcr)] = "completed" if rc == 0 else "failed"
+                if rc != 0:
+                    print(f"  Status: FAILED (exit {rc})")
             except KeyboardInterrupt:
                 status[(model, dataset, dcr)] = "failed"
                 print("\nInterrupted by user.")
                 _print_summary(status)
                 raise
-            except SystemExit as exc:
-                # _require_* helpers in cli.py call sys.exit(1) on errors.
-                status[(model, dataset, dcr)] = "failed" if exc.code else "completed"
-                print(f"  Status: {'FAILED' if exc.code else 'completed'}")
             except Exception:
                 traceback.print_exc()
                 status[(model, dataset, dcr)] = "failed"
-            finally:
-                _finish_wandb()
 
     _print_summary(status)
     return status

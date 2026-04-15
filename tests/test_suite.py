@@ -11,6 +11,7 @@ from origami_jsynth.suite import (
     _build_args,
     _build_combos,
     _is_combo_complete,
+    _namespace_to_argv,
     run_full_suite,
 )
 
@@ -137,10 +138,11 @@ class TestRunFullSuite:
 
         call_log = []
 
-        def mock_cmd_all(args):
+        def mock_run(args):
             call_log.append((args.model, args.dataset, args.dcr))
+            return 0
 
-        with _NOOP_SYNC, patch("origami_jsynth.suite.cmd_all", mock_cmd_all):
+        with _NOOP_SYNC, patch("origami_jsynth.suite._run_combo_subprocess", mock_run):
             status = run_full_suite(
                 output_dir=str(tmp_path),
                 replicates=1,
@@ -152,7 +154,7 @@ class TestRunFullSuite:
         assert ("tvae", "adult", False) not in call_log
 
     def test_oom_combos_skipped_base(self, tmp_path):
-        with _NOOP_SYNC, patch("origami_jsynth.suite.cmd_all", lambda args: None):
+        with _NOOP_SYNC, patch("origami_jsynth.suite._run_combo_subprocess", lambda args: 0):
             status = run_full_suite(
                 dcr=False,
                 output_dir=str(tmp_path),
@@ -165,7 +167,7 @@ class TestRunFullSuite:
             assert status[(model, dataset, False)] == "skipped_oom"
 
     def test_oom_combos_skipped_dcr(self, tmp_path):
-        with _NOOP_SYNC, patch("origami_jsynth.suite.cmd_all", lambda args: None):
+        with _NOOP_SYNC, patch("origami_jsynth.suite._run_combo_subprocess", lambda args: 0):
             status = run_full_suite(
                 dcr=True,
                 output_dir=str(tmp_path),
@@ -177,14 +179,15 @@ class TestRunFullSuite:
         for model, dataset in SKIP_OOM:
             assert status[(model, dataset, True)] == "skipped_oom"
 
-    def test_dcr_flag_passed_to_cmd_all(self, tmp_path):
-        """run_full_suite(dcr=True) must pass dcr=True to every cmd_all call."""
+    def test_dcr_flag_passed_to_subprocess(self, tmp_path):
+        """run_full_suite(dcr=True) must pass dcr=True to every subprocess invocation."""
         seen_dcr = set()
 
-        def mock_cmd_all(args):
+        def mock_run(args):
             seen_dcr.add(args.dcr)
+            return 0
 
-        with _NOOP_SYNC, patch("origami_jsynth.suite.cmd_all", mock_cmd_all):
+        with _NOOP_SYNC, patch("origami_jsynth.suite._run_combo_subprocess", mock_run):
             run_full_suite(
                 dcr=True,
                 output_dir=str(tmp_path),
@@ -199,12 +202,11 @@ class TestRunFullSuite:
         """A failing combo should not stop the suite."""
         call_count = {"n": 0}
 
-        def mock_cmd_all(args):
+        def mock_run(args):
             call_count["n"] += 1
-            if call_count["n"] == 1:
-                raise RuntimeError("simulated failure")
+            return 1 if call_count["n"] == 1 else 0
 
-        with _NOOP_SYNC, patch("origami_jsynth.suite.cmd_all", mock_cmd_all):
+        with _NOOP_SYNC, patch("origami_jsynth.suite._run_combo_subprocess", mock_run):
             status = run_full_suite(
                 output_dir=str(tmp_path),
                 replicates=1,
@@ -217,16 +219,15 @@ class TestRunFullSuite:
         assert len(failed) == 1
         assert len(completed) > 0
 
-    def test_sys_exit_caught(self, tmp_path):
-        """sys.exit(1) from _require_* helpers should be caught."""
-        first_call = {"done": False}
+    def test_nonzero_exit_marks_failed(self, tmp_path):
+        """A subprocess exit code != 0 should be marked as failed."""
+        call_count = {"n": 0}
 
-        def mock_cmd_all(args):
-            if not first_call["done"]:
-                first_call["done"] = True
-                raise SystemExit(1)
+        def mock_run(args):
+            call_count["n"] += 1
+            return 2 if call_count["n"] == 1 else 0
 
-        with _NOOP_SYNC, patch("origami_jsynth.suite.cmd_all", mock_cmd_all):
+        with _NOOP_SYNC, patch("origami_jsynth.suite._run_combo_subprocess", mock_run):
             status = run_full_suite(
                 output_dir=str(tmp_path),
                 replicates=1,
@@ -236,3 +237,68 @@ class TestRunFullSuite:
 
         failed = [k for k, v in status.items() if v == "failed"]
         assert len(failed) == 1
+
+
+class TestNamespaceToArgv:
+    def _ns(self, **overrides):
+        defaults = dict(
+            dataset="adult",
+            model="origami",
+            dcr=False,
+            output_dir="results",
+            replicates=1,
+            num_workers=4,
+            param=[],
+            max_minutes=None,
+            no_wandb=False,
+        )
+        defaults.update(overrides)
+        return _build_args(
+            defaults["model"],
+            defaults["dataset"],
+            defaults["dcr"],
+            defaults["output_dir"],
+            defaults["replicates"],
+            defaults["num_workers"],
+            defaults["no_wandb"],
+            defaults["max_minutes"],
+        )
+
+    def test_required_args_present(self):
+        argv = _namespace_to_argv(self._ns())
+        assert argv[0] == "all"
+        assert "--dataset" in argv and argv[argv.index("--dataset") + 1] == "adult"
+        assert "--model" in argv and argv[argv.index("--model") + 1] == "origami"
+        assert "--output-dir" in argv
+        assert "--num-workers" in argv
+        assert "--replicates" in argv
+
+    def test_dcr_flag_added_when_true(self):
+        assert "--dcr" in _namespace_to_argv(self._ns(dcr=True))
+        assert "--dcr" not in _namespace_to_argv(self._ns(dcr=False))
+
+    def test_no_wandb_flag_added_when_true(self):
+        assert "--no-wandb" in _namespace_to_argv(self._ns(no_wandb=True))
+        assert "--no-wandb" not in _namespace_to_argv(self._ns(no_wandb=False))
+
+    def test_max_minutes_only_when_set(self):
+        argv = _namespace_to_argv(self._ns(max_minutes=None))
+        assert "--max-minutes" not in argv
+        argv = _namespace_to_argv(self._ns(max_minutes=30.0))
+        assert "--max-minutes" in argv
+        assert argv[argv.index("--max-minutes") + 1] == "30.0"
+
+    def test_params_repeated(self):
+        # _build_args dedupes via dict.fromkeys; pass distinct items.
+        ns = self._ns()
+        ns.param = ["foo=1", "bar.baz=2"]
+        argv = _namespace_to_argv(ns)
+        param_indices = [i for i, x in enumerate(argv) if x == "--param"]
+        assert len(param_indices) == 2
+        values = [argv[i + 1] for i in param_indices]
+        assert values == ["foo=1", "bar.baz=2"]
+
+    def test_remote_not_passed_to_child(self):
+        """Outer RemoteSync handles S3 sync; child must not receive --remote."""
+        argv = _namespace_to_argv(self._ns())
+        assert "--remote" not in argv

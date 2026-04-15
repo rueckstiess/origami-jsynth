@@ -109,6 +109,21 @@ def _require_samples(paths: dict[str, Path], args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def _derive_log_dir(args: argparse.Namespace) -> Path | None:
+    """Return the per-combo log directory, or None if logging shouldn't apply.
+
+    Logging is enabled for commands that have both --dataset and --model
+    (i.e. all/train/sample/eval), not for data/results/full-suite.
+    """
+    dataset = getattr(args, "dataset", None)
+    model = getattr(args, "model", None)
+    output_dir = getattr(args, "output_dir", None)
+    if not dataset or not model or not output_dir:
+        return None
+    dataset_name = f"{dataset}_dcr" if getattr(args, "dcr", False) else dataset
+    return Path(output_dir) / dataset_name / model
+
+
 def _parse_overrides(overrides: list[str]) -> dict:
     """Parse key=value overrides into a dict with auto-casting."""
     kwargs = {}
@@ -945,8 +960,15 @@ def main() -> None:
     p_suite.set_defaults(func=cmd_full_suite)
 
     args = parser.parse_args()
+    log_dir = _derive_log_dir(args)
     try:
-        args.func(args)
+        if log_dir is not None:
+            from ._logging import TeeLogger
+
+            with TeeLogger(log_dir, cmd_name=args.command):
+                args.func(args)
+        else:
+            args.func(args)
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
         sys.exit(130)
