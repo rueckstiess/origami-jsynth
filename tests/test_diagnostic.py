@@ -36,6 +36,7 @@ class TestGenerateRecords:
             "int_sparse",
             "cont_interaction",
             "mixed_value",
+            "cat_explicit_null",
             "target",
         }
         assert expected == set(df.columns)
@@ -67,6 +68,19 @@ class TestGenerateRecords:
         ]
         for col in sparse:
             assert df[col].isna().sum() > 0, f"{col} has no NaN"
+
+    def test_cat_explicit_null_always_present(self, records):
+        # Key must always be present (distinct from absent keys like cat_nullable).
+        for r in records:
+            assert "cat_explicit_null" in r, f"key missing: {r}"
+
+    def test_cat_explicit_null_has_both_none_and_str(self, records):
+        n_none = sum(1 for r in records if r["cat_explicit_null"] is None)
+        n_str = sum(1 for r in records if isinstance(r["cat_explicit_null"], str))
+        assert n_none > 0 and n_str > 0
+        # ~70% None
+        none_pct = n_none / len(records)
+        assert 0.55 < none_pct < 0.85
 
     def test_conditional_missingness_cont_conditional(self, df):
         # NaN whenever cat_group == "alpha", never otherwise

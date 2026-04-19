@@ -189,11 +189,15 @@ def separate_types(
         dtypes = _infer_dtypes_column(df[col])
         unique_dtypes = set(dtypes.unique())
 
-        # Check if column is homogeneous (only one value type, no missing values)
-        value_types = unique_dtypes - {"missing", "null"}
+        # Check if column is homogeneous (only one value type, no missing/null values).
+        # A column with explicit None values ("null") must be separated so the
+        # null-vs-missing distinction survives the baseline roundtrip — otherwise
+        # baselines that can't represent None collapse it into NaN, which evaluation
+        # then classifies as "missing" instead of "null".
+        value_types = unique_dtypes - {"missing"}
         has_missing = "missing" in unique_dtypes
         if len(value_types) <= 1 and not has_missing and not force:
-            # Truly homogeneous with no missing values — keep as-is
+            # Truly homogeneous with no null/missing values — keep as-is
             result_cols[col] = df[col]
             column_map[col] = [col]
             continue

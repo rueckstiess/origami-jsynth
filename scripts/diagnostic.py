@@ -78,6 +78,11 @@ def generate_records(n: int, seed: int = SEED) -> list[dict]:
     # cat_nullable: simple 3-way
     cat_nullable_base = rng.choice(["yes", "no", "maybe"], size=n)
 
+    # cat_explicit_null: mostly explicit None (present-but-null), sometimes a string.
+    # Distinct from cat_nullable/cat_region which use absent keys for missing values.
+    # This tests whether baselines preserve the null-vs-missing distinction.
+    cat_explicit_null_base = rng.choice(["red", "green", "blue"], size=n)
+
     # --- Observed: mixed type ---
     # ~60% numeric (when Z2 > -0.25), ~40% string label (otherwise)
     mixed_is_num = Z2 > -0.25
@@ -105,6 +110,8 @@ def generate_records(n: int, seed: int = SEED) -> list[dict]:
     miss_bool_nullable = rng.uniform(size=n) < 0.25
     miss_cont_cond = cat_group == "alpha"  # conditional on cat_group
     miss_cat_null = ~bool_active  # conditional on bool_active
+    # cat_explicit_null: 70% explicit None, 30% string value (column always present)
+    is_null_explicit = rng.uniform(size=n) < 0.70
 
     # --- Assemble records (omit key for missing values) ---
     records = []
@@ -135,6 +142,8 @@ def generate_records(n: int, seed: int = SEED) -> list[dict]:
             row["cont_conditional"] = float(cont_conditional[i])
         if not miss_cat_null[i]:
             row["cat_nullable"] = str(cat_nullable_base[i])
+        # cat_explicit_null: always present, but often None (present-but-null)
+        row["cat_explicit_null"] = None if is_null_explicit[i] else str(cat_explicit_null_base[i])
         records.append(row)
 
     return records
@@ -175,6 +184,7 @@ def verify(records: list[dict]) -> None:
         "int_sparse",
         "cont_interaction",
         "mixed_value",
+        "cat_explicit_null",
         "target",
     ]
     for col in all_cols:
@@ -287,6 +297,7 @@ def audit_synthetic(
         "int_sparse",
         "cont_interaction",
         "mixed_value",
+        "cat_explicit_null",
         "target",
     }
     syn_cols = set(syn.columns)
@@ -453,7 +464,37 @@ def audit_synthetic(
             warn_only=True,
         )
 
-    # ---- 9. Mixed-type column ----
+    # ---- 9. Null vs missing distinction ----
+    # cat_explicit_null is ALWAYS present in real records, but ~70% of values
+    # are explicit Python None (JSON null). A synthesizer that collapses None
+    # into NaN/absent will cause this column to appear "missing" instead of
+    # "null" — trivially detectable by XGBoost.
+    print("\n--- Null vs missing (cat_explicit_null) ---")
+    if "cat_explicit_null" in syn.columns:
+        # Distinguish absent keys from None values by checking each raw record.
+        n_absent = sum(1 for r in synthetic_records if "cat_explicit_null" not in r)
+        n_none = sum(1 for r in synthetic_records if r.get("cat_explicit_null", "<absent>") is None)
+        absent_pct = n_absent / len(synthetic_records) if synthetic_records else 0
+        none_pct = n_none / len(synthetic_records) if synthetic_records else 0
+
+        check(
+            "explicit_null_no_absent_keys",
+            absent_pct < 0.05,
+            f"{absent_pct:.1%} of synthetic records have cat_explicit_null absent "
+            f"(should be ~0%; real data always has the key)",
+        )
+        check(
+            "explicit_null_preserves_none",
+            none_pct > 0.3,
+            f"{none_pct:.1%} of synthetic records have cat_explicit_null=None "
+            f"(real: ~70%; low value indicates None→NaN collapse)",
+            warn_only=True,
+        )
+    else:
+        check("explicit_null_no_absent_keys", False, "column missing")
+        check("explicit_null_preserves_none", False, "column missing")
+
+    # ---- 10. Mixed-type column ----
     print("\n--- Mixed-type column ---")
     if "mixed_value" in syn.columns:
         # Check that both numeric and string values are present
