@@ -30,7 +30,7 @@ training:
   lr_min: 0.000005
   lr_cosine_exponent: 2.0
   lr_scheduler: cosine
-  num_epochs: 150
+  num_epochs: 50
   shuffle_keys: true
   target_loss_weight: 1.0
   warmup_steps: 1000

@@ -112,7 +112,10 @@ def _compute_dcr_l2_batched(
             pct = 100 * (idx + 1) / n_batches
             rate = (idx + 1) * batch_size / elapsed if elapsed > 0 else 0
             eta = (n_batches - idx - 1) * (elapsed / (idx + 1)) if idx > 0 else 0
-            print(f"  {desc}: {idx + 1}/{n_batches} ({pct:.0f}%) {elapsed:.1f}s [{rate:.0f} rows/s] ETA {eta:.0f}s")
+            print(
+                f"  {desc}: {idx + 1}/{n_batches} ({pct:.0f}%) "
+                f"{elapsed:.1f}s [{rate:.0f} rows/s] ETA {eta:.0f}s"
+            )
             last_report = now
 
     return dcr
@@ -210,7 +213,9 @@ def compute_privacy(
     df, masks = prepare_union_table(train=train_records, test=test_records, synth=synthetic_records)
     train_mask, test_mask, synth_mask = masks["train"], masks["test"], masks["synth"]
     if verbose:
-        print(f"  Union table: {len(df)} rows x {len(df.columns)} cols ({time.monotonic() - t0:.1f}s)")
+        print(
+            f"  Union table: {len(df)} rows x {len(df.columns)} cols ({time.monotonic() - t0:.1f}s)"
+        )
 
     # Encode type-separated columns into numeric features
     t0 = time.monotonic()
@@ -225,9 +230,10 @@ def compute_privacy(
     for col in encoded.columns:
         if any(col.endswith(s) for s in num_suffixes):
             train_vals = encoded.loc[train_mask, col].astype(float)
-            col_range = train_vals.max() - train_vals.min()
+            col_min = train_vals.min()
+            col_range = train_vals.max() - col_min
             if col_range > 0:
-                encoded[col] = encoded[col].astype(float) / col_range
+                encoded[col] = (encoded[col].astype(float) - col_min) / col_range
 
     # Fill NaN with 0 (absent fields contribute nothing to distance)
     encoded = encoded.fillna(0.0)
@@ -284,20 +290,27 @@ def compute_privacy(
     del encoded
 
     dcr_to_train = _compute_dcr_l2_batched(
-        synth_arr, train_arr, batch_size, desc="DCR synth→train",
+        synth_arr,
+        train_arr,
+        batch_size,
+        desc="DCR synth→train",
     )
     del train_arr
 
     dcr_to_test = _compute_dcr_l2_batched(
-        synth_arr, test_arr, batch_size, desc="DCR synth→test",
+        synth_arr,
+        test_arr,
+        batch_size,
+        desc="DCR synth→test",
     )
     del test_arr, synth_arr
 
     # Score computation
+    tied = np.isclose(dcr_to_train, dcr_to_test, rtol=1e-6, atol=1e-8)
     closer_to_train = np.sum(dcr_to_train < dcr_to_test)
     total = len(dcr_to_train)
 
-    dcr_score = (closer_to_train / total) * 100
+    dcr_score = ((closer_to_train + 0.5 * np.sum(tied)) / total) * 100
     # Only penalize dcr_score > 50 (closer to train = memorization risk).
     # dcr_score <= 50 means closer to test, which is not a privacy concern.
     privacy_score = 1.0 - 2.0 * max(dcr_score / 100.0 - 0.5, 0.0)

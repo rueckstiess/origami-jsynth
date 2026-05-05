@@ -25,7 +25,7 @@ training:
   eval_strategy: steps
   mixed_precision: "no"
   use_accelerate: false
-  num_epochs: 150
+  num_epochs: 200
   shuffle_keys: true
   target_loss_weight: 1.0
   warmup_steps: 1000

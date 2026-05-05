@@ -26,10 +26,7 @@ class TrainingTimeout:
         import _thread
 
         self._triggered = True
-        print(
-            f"\nTimeout reached: {self.max_seconds / 60:.1f} min elapsed. "
-            "Stopping training."
-        )
+        print(f"\nTimeout reached: {self.max_seconds / 60:.1f} min elapsed. Stopping training.")
         _thread.interrupt_main()
 
     def __enter__(self) -> TrainingTimeout:

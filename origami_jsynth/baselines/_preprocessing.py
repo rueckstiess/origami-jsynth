@@ -79,7 +79,7 @@ def records_to_dataframe(
     """Convert JSON records to a DataFrame suitable for tabular baselines.
 
     Flattens nested JSON (no-op for already-flat tabular data) and runs
-    separate_types(force=False) to split sparse and mixed-type columns into 
+    separate_types(force=False) to split sparse and mixed-type columns into
     multiple typed columns.
 
     Args:

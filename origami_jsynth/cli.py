@@ -300,7 +300,8 @@ def cmd_sample(args: argparse.Namespace) -> None:
                 records = synth.sample(n_train)
                 save_jsonl(records, output_path)
                 print(
-                    f"Replicate {i}/{args.replicates}: saved {len(records)} records to {output_path}"
+                    f"Replicate {i}/{args.replicates}: "
+                    f"saved {len(records)} records to {output_path}"
                 )
 
 
@@ -330,9 +331,10 @@ def cmd_overview(args: argparse.Namespace) -> None:
 
     # Fixed order matching generate_latex_tables.py
     datasets = ["adult", "diabetes", "electric_vehicles", "yelp", "ddxplus", "github_issues"]
-    models = ["tvae", "ctgan", "realtabformer", "mostlyai", "tabdiff", "origami"]
+    models = ["tabby", "tvae", "ctgan", "realtabformer", "mostlyai", "tabdiff", "origami"]
 
     model_labels = {
+        "tabby": "Tabby",
         "origami": "Origami",
         "ctgan": "CTGAN",
         "tvae": "TVAE",
@@ -381,6 +383,11 @@ def cmd_overview(args: argparse.Namespace) -> None:
         ("tvae", "electric_vehicles"),
         ("realtabformer", "ddxplus"),
         ("realtabformer", "github_issues"),
+        ("tabby", "diabetes"),
+        ("tabby", "electric_vehicles"),
+        ("tabby", "yelp"),
+        ("tabby", "ddxplus"),
+        ("tabby", "github_issues"),
     }
 
     if args.latex:
@@ -561,6 +568,7 @@ def _print_latex_tables(datasets, models, model_labels, dataset_labels, data, oo
         "yelp": "Yelp",
     }
     latex_model_labels = {
+        "tabby": "Tabby",
         "tvae": "TVAE",
         "ctgan": "CTGAN",
         "realtabformer": "REaLTabFormer",
@@ -571,7 +579,8 @@ def _print_latex_tables(datasets, models, model_labels, dataset_labels, data, oo
 
     tables = {
         "fidelity": {
-            "caption": "Fidelity metrics across datasets (mean $\\pm$ std over 10 replicates). Higher is better.",
+            "caption": "Fidelity metrics across datasets "
+            "(mean $\\pm$ std over 3 replicates). Higher is better.",
             "label": "tab:fidelity",
             "source": "base",
             "metrics": [
@@ -582,20 +591,22 @@ def _print_latex_tables(datasets, models, model_labels, dataset_labels, data, oo
             "higher_is_better": True,
         },
         "utility": {
-            "caption": "Utility metrics across datasets (mean $\\pm$ std over 10 replicates). Higher is better.",
+            "caption": "Utility metrics across datasets (mean $\\pm$ std over 3 replicates). "
+            "Higher is better. Overall utility normalizes TSTR $F_1$ by the "
+            "corresponding real-data baseline.",
             "label": "tab:utility",
             "source": "base",
             "metrics": [
                 ("utility", "Overall score"),
-                ("utility_trtr_f1_weighted", "TRTR $F_1$"),
                 ("utility_tstr_f1_weighted", "TSTR $F_1$"),
             ],
             "higher_is_better": True,
         },
         "detection": {
-            "caption": "Detection metrics across datasets (mean $\\pm$ std over 10 replicates). "
+            "caption": "Detection metrics across datasets (mean $\\pm$ std over 3 replicates). "
             "Detection score: higher means harder to detect (better). "
-            "XGBoost classifier ROC AUC: lower means harder to distinguish from real data (better).",
+            "XGBoost classifier ROC AUC: lower means harder to distinguish "
+            "from real data (better).",
             "label": "tab:detection",
             "source": "base",
             "metrics": [
@@ -608,21 +619,19 @@ def _print_latex_tables(datasets, models, model_labels, dataset_labels, data, oo
             },
         },
         "privacy": {
-            "caption": "Privacy metrics across datasets (mean $\\pm$ std over 10 replicates, "
-            "3 replicates for DDXPlus). "
+            "caption": "Privacy metrics across datasets (mean $\\pm$ std over 3 replicates). "
             "Privacy score: higher is better. "
-            "DCR score $\\leq$ 50 indicates no memorization.",
+            "DCR score $\\leq$ 50 indicates no memorization. "
+            "Exact-match counts are discussed in the text.",
             "label": "tab:privacy",
             "source": "dcr",
             "metrics": [
                 ("privacy", "Overall score $\\uparrow$"),
                 ("privacy_dcr_score", "DCR $\\downarrow$"),
-                ("privacy_exact_matches_train", "Exact match $\\downarrow$"),
             ],
             "higher_is_better": {
                 "privacy": True,
                 "privacy_dcr_score": None,
-                "privacy_exact_matches_train": False,
             },
         },
     }

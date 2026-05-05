@@ -76,11 +76,16 @@ def _namespace_to_argv(args: argparse.Namespace) -> list[str]:
     """Convert a suite-built Namespace back into argv for `origami-jsynth all`."""
     argv = [
         "all",
-        "--dataset", args.dataset,
-        "--model", args.model,
-        "--output-dir", args.output_dir,
-        "--num-workers", str(args.num_workers),
-        "--replicates", str(args.replicates),
+        "--dataset",
+        args.dataset,
+        "--model",
+        args.model,
+        "--output-dir",
+        args.output_dir,
+        "--num-workers",
+        str(args.num_workers),
+        "--replicates",
+        str(args.replicates),
     ]
     if args.dcr:
         argv.append("--dcr")

@@ -46,8 +46,7 @@ class TeeLogger:
         self._stderr_file = open(self.log_dir / "stderr.log", "ab")
 
         header = (
-            f"=== Run started {_now_iso()} on {_HOSTNAME} "
-            f"— cmd: {self.cmd_name} ===\n"
+            f"=== Run started {_now_iso()} on {_HOSTNAME} — cmd: {self.cmd_name} ===\n"
         ).encode()
         self._stdout_file.write(header)
         self._stdout_file.flush()

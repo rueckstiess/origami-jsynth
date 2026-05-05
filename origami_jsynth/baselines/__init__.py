@@ -16,10 +16,14 @@ _REGISTRY: dict[str, tuple[str, str]] = {
 }
 
 BASELINE_NAMES = list(_REGISTRY.keys())
-MODEL_NAMES = ["origami"] + BASELINE_NAMES
+# "tabby" is evaluated from externally-generated samples (no Python adapter),
+# so it's a valid --model for data/eval but not train/sample.
+MODEL_NAMES = ["origami", *BASELINE_NAMES, "tabby"]
 
 
-def get_synthesizer(name: str, tabular: bool = True, dataset_info: Any = None, **kwargs: Any) -> Any:
+def get_synthesizer(
+    name: str, tabular: bool = True, dataset_info: Any = None, **kwargs: Any
+) -> Any:
     """Instantiate a baseline synthesizer by name.
 
     Args:

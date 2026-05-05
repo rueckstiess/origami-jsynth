@@ -1,7 +1,6 @@
 """Tests for TabDiff checkpoint selection logic (_find_checkpoint)."""
 
 import pytest
-
 from tabdiff.train import _find_checkpoint
 
 

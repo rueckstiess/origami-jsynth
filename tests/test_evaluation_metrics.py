@@ -62,7 +62,11 @@ class TestComputeFidelity:
         # Synth from a clearly different distribution (different seed, different ranges).
         rng = random.Random(99)
         synth = [
-            {"age": rng.randint(50, 90), "income": rng.gauss(100000, 5000), "label": rng.choice(["X", "Y"])}
+            {
+                "age": rng.randint(50, 90),
+                "income": rng.gauss(100000, 5000),
+                "label": rng.choice(["X", "Y"]),
+            }
             for _ in range(100)
         ]
         result = compute_fidelity(real, synth, max_workers=1)
@@ -127,7 +131,11 @@ class TestComputeDetection:
         records = make_records(n=200)
         rng = random.Random(99)
         very_different = [
-            {"age": rng.randint(60, 90), "income": rng.gauss(200000, 5000), "label": rng.choice(["X", "Y"])}
+            {
+                "age": rng.randint(60, 90),
+                "income": rng.gauss(200000, 5000),
+                "label": rng.choice(["X", "Y"]),
+            }
             for _ in range(200)
         ]
         identical_result = compute_detection(records, records)
@@ -217,6 +225,26 @@ class TestComputePrivacy:
         result = compute_privacy(train, test, synth, verbose=False)
         assert result.exact_matches_train >= 5
 
+    def test_dcr_ties_count_neutral(self):
+        train = [{"x": 0}, {"x": 2}]
+        test = [{"x": 0}, {"x": 2}]
+        synth = [{"x": 1}, {"x": 3}]
+
+        result = compute_privacy(train, test, synth, verbose=False)
+
+        assert result.dcr_score == pytest.approx(50.0)
+        assert result.privacy_score == pytest.approx(1.0)
+
+    def test_dcr_centers_large_offset_numeric_columns(self):
+        base = 1_770_000_000
+        train = [{"created_at": base + offset} for offset in (0, 100, 200)]
+        test = [{"created_at": base + offset} for offset in (10, 110, 210)]
+        synth = [{"created_at": base + offset} for offset in (0, 100, 200)]
+
+        result = compute_privacy(train, test, synth, verbose=False)
+
+        assert result.dcr_score == pytest.approx(100.0)
+
     def test_to_dict_from_dict_roundtrip(self):
         records = make_records(n=60)
         train, test = records[:30], records[30:40]
@@ -258,21 +286,27 @@ class TestComputeUtility:
         train = make_records(n=80, seed=1)
         test = make_records(n=20, seed=2)
         synth = make_records(n=80, seed=3)
-        result = compute_utility(train, test, synth, target_field="label", task_type="classification")
+        result = compute_utility(
+            train, test, synth, target_field="label", task_type="classification"
+        )
         assert isinstance(result, UtilityResult)
 
     def test_utility_score_in_range(self):
         train = make_records(n=80, seed=1)
         test = make_records(n=20, seed=2)
         synth = make_records(n=80, seed=3)
-        result = compute_utility(train, test, synth, target_field="label", task_type="classification")
+        result = compute_utility(
+            train, test, synth, target_field="label", task_type="classification"
+        )
         assert 0.0 <= result.utility_score <= 1.0
 
     def test_result_has_required_fields(self):
         train = make_records(n=80, seed=1)
         test = make_records(n=20, seed=2)
         synth = make_records(n=80, seed=3)
-        result = compute_utility(train, test, synth, target_field="label", task_type="classification")
+        result = compute_utility(
+            train, test, synth, target_field="label", task_type="classification"
+        )
         assert hasattr(result, "trtr_metrics")
         assert hasattr(result, "tstr_metrics")
         assert hasattr(result, "utility_score")
@@ -281,7 +315,9 @@ class TestComputeUtility:
         train = make_records(n=80, seed=1)
         test = make_records(n=20, seed=2)
         synth = make_records(n=80, seed=3)
-        result = compute_utility(train, test, synth, target_field="label", task_type="classification")
+        result = compute_utility(
+            train, test, synth, target_field="label", task_type="classification"
+        )
         d = result.to_dict()
         restored = UtilityResult.from_dict(d)
         assert restored.utility_score == pytest.approx(result.utility_score)

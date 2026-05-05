@@ -9,10 +9,7 @@ from pathlib import Path
 
 from origami_jsynth.cli import _derive_log_dir
 
-
-PREFIX_RE = re.compile(
-    r"^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+\-]\d{2}:\d{2} \S+\] "
-)
+PREFIX_RE = re.compile(r"^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+\-]\d{2}:\d{2} \S+\] ")
 
 
 class TestDeriveLogDir:
@@ -69,9 +66,7 @@ def _run_tee_in_subprocess(tmp_path: Path, body: str) -> tuple[str, str, int]:
 
 class TestTeeLogger:
     def test_stdout_tees_to_terminal_and_log(self, tmp_path):
-        out, err, rc = _run_tee_in_subprocess(
-            tmp_path, "print('hello stdout')"
-        )
+        out, err, rc = _run_tee_in_subprocess(tmp_path, "print('hello stdout')")
         assert rc == 0
         assert "hello stdout" in out
 
@@ -96,9 +91,7 @@ class TestTeeLogger:
 
     def test_captures_raw_fd_writes(self, tmp_path):
         """C-level writes (os.write) must be captured, not just sys.stdout."""
-        out, _, rc = _run_tee_in_subprocess(
-            tmp_path, "import os; os.write(1, b'raw fd write\\n')"
-        )
+        out, _, rc = _run_tee_in_subprocess(tmp_path, "import os; os.write(1, b'raw fd write\\n')")
         assert rc == 0
         assert "raw fd write" in out
         log = (tmp_path / "stdout.log").read_text()
