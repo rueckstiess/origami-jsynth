@@ -43,6 +43,7 @@ from origami_jsynth.train import (
     TimeoutCallback,
     WandbCallback,
     find_latest_checkpoint,
+    split_train_eval,
 )
 
 # =============================================================================
@@ -104,10 +105,14 @@ yanex.assert_dependency("data.py", "data")
 dataset: str = yanex.get_graph().get_param("dataset")
 data_dir: Path = yanex.get_dependency("data").artifacts_dir
 train_records = yanex.load_artifact("train.jsonl")
-test_records = yanex.load_artifact("test.jsonl")
+
+fit_records, eval_records = split_train_eval(train_records, seed)
 
 print(f"Dataset: {dataset}")
-print(f"Train: {len(train_records)} records, Eval: {len(test_records)} records")
+print(
+    f"Train: {len(fit_records)} records, Eval: {len(eval_records)} records "
+    f"(split from {len(train_records)} train records)"
+)
 
 # =============================================================================
 # Config: load YAML, merge yanex param overrides per section
@@ -199,9 +204,8 @@ if use_wandb:
 # Train
 # =============================================================================
 
-pipeline.fit(train_records, eval_data=test_records, callbacks=callbacks, verbose=True)
+pipeline.fit(fit_records, eval_data=eval_records, callbacks=callbacks, verbose=True)
 
 final_path = checkpoint_dir / "final.pt"
 pipeline.save(final_path, include_training_state=True)
 print(f"\nTraining complete. Final model saved to {final_path}")
-

@@ -23,7 +23,7 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-To run baseline synthesizers (CTGAN, TVAE, GReaT, REaLTabFormer, Mostly AI, TabDiff), instead install with the `baselines` extra:
+To run baseline synthesizers (CTGAN, TVAE, REaLTabFormer, Mostly AI, TabDiff), instead install with the `baselines` extra:
 
 ```bash
 pip install -e ".[baselines]"
@@ -37,12 +37,19 @@ Run the full pipeline for a dataset:
 origami-jsynth all --dataset adult --model origami
 ```
 
-Or run each step individually:
+Or run each step individually (every step requires the previous steps to have completed):
 
 ```text
+# 1. load and prepare data
 origami-jsynth data --dataset adult --model origami
+
+# 2. train model
 origami-jsynth train --dataset adult --model origami
+
+# 3. generate synthetic data
 origami-jsynth sample --dataset adult --model origami
+
+# 4. evaluate synthetic samples
 origami-jsynth eval --dataset adult --model origami
 ```
 
@@ -67,7 +74,6 @@ The `--model` flag selects which synthesizer to run. The default is `origami`.
 | `origami` | `origami-ml` | Origami (ours) |
 | `ctgan` | `sdv` | CTGAN |
 | `tvae` | `sdv` | TVAE |
-| `great` | `be-great` | GReaT (distilgpt2) |
 | `realtabformer` | `realtabformer` | REaLTabFormer |
 | `mostlyai` | `mostlyai-engine` | Mostly AI (TabularARGN) |
 | `tabdiff` | (vendored) | TabDiff (diffusion based) |
@@ -80,24 +86,38 @@ All models share the same `data`, `sample`, and `eval` pipeline. Each model's ar
 
 [Tabby](https://github.com/soCromp/tabby) is not included in this package because they do not offer a Python SDK and instead operate with Python scripts on `.csv` files directly. We ran these baselines in their repository using the flattened `.csv` splits produced by the `data` command.
 
+
+## Enforcing wall-clock time budget
+
+To enforce a wall-clock time budget for training the models, use the `--max-minutes` flag with the `train` or `all` command.
+
+In the paper, we use a max. 24h wall-clock time budget: 
+
+```
+origami-jsynth all --dataset github_issues --model origami --max-minutes 1440
+```
+
+Training will be gracefully stopped when the time limit is reached, the best checkpoint so far will be used for sampling, and the pipeline will continue to evaluation.
+
+
 ## Replicates
 
 To measure variance in evaluation metrics, use `--replicates` (`-R`) to run multiple independent sampling rounds with different seeds:
 
 ```bash
-origami-jsynth sample --dataset adult --replicates 10
+origami-jsynth sample --dataset adult --replicates 3
 origami-jsynth eval --dataset adult
 ```
 
-The default in this package is `--replicates 1` for a quick run, but the paper results use `--replicates 10` for all datasets, except DDXPlus for DCR, which uses `--replicates 3` due to the much longer privacy metric evaluation time.
+The default in this package is `--replicates 1` for a quick run, but the paper results use `--replicates 3` for all datasets.
 
-This produces `synthetic_1.jsonl` through `synthetic_10.jsonl` in the samples directory. The `eval` command automatically discovers all replicate files, evaluates each independently, and reports aggregate statistics (mean and standard deviation). Results are saved as individual `results_{i}.json` files plus an `agg_results.json` with the aggregate summary.
+This produces `synthetic_1.jsonl` through `synthetic_3.jsonl` in the samples directory. The `eval` command automatically discovers all replicate files, evaluates each independently, and reports aggregate statistics (mean and standard deviation). Results are saved as individual `results_{i}.json` files plus an `agg_results.json` with the aggregate summary.
 
 Sampling is resumable: if interrupted, re-running the same command will skip replicates that already have completed.
 
 ## DCR Privacy Evaluation
 
-To evaluate privacy using Distance to Closest Record (DCR), use the `--dcr` flag. This creates a 50/50 train/test split and evaluates privacy only:
+To evaluate privacy using Distance to Closest Record (DCR), use the `--dcr` flag with any of the commands. This creates a 50/50 train/test split and evaluates privacy only, for example:
 
 ```bash
 origami-jsynth all --dataset adult --dcr
@@ -114,6 +134,7 @@ DCR results are saved to `./results/<dataset>_dcr/<model>/`.
 | electric_vehicles | Tabular | Multiclass | ~210K | HuggingFace |
 | ddxplus | Semi-structured | Multiclass | ~1.16M | HuggingFace |
 | yelp | Semi-structured | Multiclass | ~150K | Manual download |
+| github_issues | Semi-structured | Multiclass | ~642k | HuggingFace |
 
 ### Yelp Dataset
 
@@ -122,7 +143,7 @@ The Yelp dataset cannot be redistributed due to the [Yelp Dataset Terms of Use](
 1. Go to https://www.yelp.com/dataset and accept the terms
 2. Download the dataset (you need `yelp_academic_dataset_business.json`)
 3. Place it at `./results/yelp_academic_dataset_business.json`
-4. Run `origami-jsynth data --dataset yelp`
+4. Run `origami-jsynth data --dataset yelp` to prepare the splits and flattened CSV.
 
 ## CLI Reference
 
@@ -138,13 +159,13 @@ Commands:
   all       Run the full pipeline (data -> train -> sample -> eval)
 
 Options:
-  --dataset       Dataset name (adult, diabetes, electric_vehicles, ddxplus, yelp)
-  --model         Synthesizer to use (default: origami; see Baselines section)
-  --output-dir    Base output directory (default: ./results)
-  --dcr           DCR mode: 50/50 split, privacy evaluation only
-  --num-workers   Number of parallel sampling workers (default: 4, sample/all only)
+  --dataset         Dataset name (adult, diabetes, electric_vehicles, ddxplus, yelp)
+  --model           Synthesizer to use (default: origami; see Baselines section)
+  --output-dir      Base output directory (default: ./results)
+  --dcr             DCR mode: 50/50 split, privacy evaluation only
+  --num-workers     Number of parallel sampling workers (default: 4, sample/all only)
   -R, --replicates  Number of independent sampling rounds (default: 1, sample/all only)
-  --param         Override config parameters (e.g. --param training.num_epochs=5)
+  --param           Override config parameters (e.g. --param training.num_epochs=5)
 ```
 
 ## Output Structure
@@ -170,6 +191,33 @@ results/
     └── ...                      # same layout as above
 ```
 
+## Hyper-parameter settings for ORiGAMi model
+
+The hyper-parameters for the ORiGAMi model are defined in the `./configs/<dataset>.yaml` files, one for each dataset. These are used by default when running the CLI commands. To override any hyper-parameter, use the `--param` flag with dot notation to specify the parameter path and value, for example:
+
+```bash
+origami-jsynth train --model origami --dataset adult --param model.d_model=32 
+```
+
+## Tips for faster ORiGAMi training and sampling
+
+### Dataloader Workers
+
+The `training.dataloader_num_workers` parameter controls the number of parallel workers on CUDA devices for loading training data and preparing masks for grammar and schema constraints while the GPU is processing the current batch. We recommend setting this to half the available CPU cores (check with `nproc`). For example, on a 16-core machine, use 
+
+```
+origami-jsynth train --model origami --dataset <dataset> --param training.dataloader_num_workers=8
+```
+
+### Sampling Workers
+
+Sampling can be slow for the largest datasets (ddxplus, github_issues) due to the autoregressive decoding process. We recommend using the `--num-workers` flag for the `all` or `sample` commands set to the number of available cores minus 2 (to leave room for other system processes). For example, on a 16-core machine, use
+
+```
+origami-jsynth sample --model origami --dataset <dataset> --num-workers 14
+```
+
+
 
 ## Ablation Experiments
 
@@ -177,9 +225,9 @@ To reproduce the ablation experiments from the paper, check out the notebooks in
 These are not integrated into the CLI and require manual execution:
 
 - [Kernel Density Plots on Electric Vehicles](notebooks/kde_electric_vehicles.ipynb)
+- [Array Lengths analysis](notebooks/array_length_ablation.ipynb)
 - [KVPE vs. sequential position encoding](notebooks/kvpe_ablation.ipynb)
 - [Shuffled vs. unshuffled key order](notebooks/shuffle_keys_ablation.ipynb)
-
 
 ## Origami standalone package
 

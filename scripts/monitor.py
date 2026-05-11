@@ -129,7 +129,9 @@ def main():
                 cpu_avg = sum(cpu_history) / len(cpu_history) if cpu_history else 0
                 lines.append(
                     f"  CPU: {format_bar(cpu_pct)} {cpu_pct:5.1f}%  "
-                    f"(avg: {cpu_avg:5.1f}%, min: {min(cpu_history):5.1f}%, max: {max(cpu_history):5.1f}%)"
+                    f"(avg: {cpu_avg:5.1f}%, "
+                    f"min: {min(cpu_history):5.1f}%, "
+                    f"max: {max(cpu_history):5.1f}%)"
                 )
 
             if mem and mem_pct is not None:
@@ -145,10 +147,13 @@ def main():
                     mem_pct = 100 * gpu["mem_used"] / gpu["mem_total"]
                     lines.append(
                         f"  GPU {i}: {format_bar(gpu['util'])} {gpu['util']:5.1f}%  "
-                        f"(avg: {gpu_avg:5.1f}%, min: {min(gpu_history):5.1f}%, max: {max(gpu_history):5.1f}%)"
+                        f"(avg: {gpu_avg:5.1f}%, "
+                        f"min: {min(gpu_history):5.1f}%, "
+                        f"max: {max(gpu_history):5.1f}%)"
                     )
                     lines.append(
-                        f"  Mem {i}: {format_bar(mem_pct)} {gpu['mem_used']:5}MB / {gpu['mem_total']}MB"
+                        f"  Mem {i}: {format_bar(mem_pct)} "
+                        f"{gpu['mem_used']:5}MB / {gpu['mem_total']}MB"
                     )
 
             print("\n".join(lines))
@@ -159,19 +164,19 @@ def main():
         print("=" * 60)
         if cpu_history:
             print(
-                f"  CPU:  avg={sum(cpu_history)/len(cpu_history):.1f}%  "
+                f"  CPU:  avg={sum(cpu_history) / len(cpu_history):.1f}%  "
                 f"min={min(cpu_history):.1f}%  max={max(cpu_history):.1f}%  "
                 f"samples={len(cpu_history)}"
             )
         if mem_history:
             print(
-                f"  RAM:  avg={sum(mem_history)/len(mem_history):.1f}%  "
+                f"  RAM:  avg={sum(mem_history) / len(mem_history):.1f}%  "
                 f"min={min(mem_history):.1f}%  max={max(mem_history):.1f}%  "
                 f"samples={len(mem_history)}"
             )
         if gpu_history:
             print(
-                f"  GPU:  avg={sum(gpu_history)/len(gpu_history):.1f}%  "
+                f"  GPU:  avg={sum(gpu_history) / len(gpu_history):.1f}%  "
                 f"min={min(gpu_history):.1f}%  max={max(gpu_history):.1f}%  "
                 f"samples={len(gpu_history)}"
             )

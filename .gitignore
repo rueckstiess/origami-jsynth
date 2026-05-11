@@ -1,9 +1,6 @@
 # Virtual environments
 .venv/
 
-# Claude Code
-.claude/
-
 # Results (generated data, checkpoints, samples, reports)
 results*/
 test/
@@ -30,3 +27,6 @@ wandb/
 *.png
 *.tgz
 *.tar.gz
+
+sky-dev.yaml
+.claude/

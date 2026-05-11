@@ -207,6 +207,46 @@ def train(
     return TrainResult(model_save_path=model_save_path, config=raw_config)
 
 
+def _find_checkpoint(ckpt_parent: str) -> str:
+    """Return the path of the best checkpoint in *ckpt_parent*.
+
+    Selection rules:
+    1. Merge ``best_ema_model*`` and ``best_model_*`` into one pool and pick
+       the file with the lowest loss encoded in its name (second-to-last
+       underscore-separated segment, e.g. ``best_ema_model_1.6117_7856.pt``
+       → 1.6117).  EMA is not unconditionally better — with few training
+       steps the regular model may have a lower loss, so we let the loss
+       value decide.
+    2. If no ``best_*`` checkpoint exists fall back to ``final_ema_model*``.
+    3. If that is also absent fall back to ``final_model*``.
+    4. Raise ``FileNotFoundError`` if nothing is found.
+    """
+
+    def _by_loss(p: str) -> float:
+        """Extract loss from filenames like best_ema_model_1.6117_7856.pt."""
+        parts = Path(p).stem.split("_")
+        try:
+            return float(parts[-2])
+        except (ValueError, IndexError):
+            return float("inf")
+
+    best_ckpts = glob.glob(
+        os.path.join(ckpt_parent, "best_ema_model*")
+    ) + glob.glob(os.path.join(ckpt_parent, "best_model_*"))
+    ckpt_files = sorted(best_ckpts, key=_by_loss)
+
+    if not ckpt_files:
+        ckpt_files = glob.glob(os.path.join(ckpt_parent, "final_ema_model*"))
+    if not ckpt_files:
+        ckpt_files = glob.glob(os.path.join(ckpt_parent, "final_model*"))
+    if not ckpt_files:
+        raise FileNotFoundError(
+            f"No TabDiff checkpoints found in {ckpt_parent}. "
+            "Train a model first."
+        )
+    return ckpt_files[0]
+
+
 def sample(
     data_dir: str,
     info: dict,
@@ -242,37 +282,7 @@ def sample(
     # Find checkpoint
     if ckpt_path is None:
         ckpt_parent = os.path.join(save_dir, "ckpt", dataname, exp_name)
-
-        def _by_loss(p: str) -> float:
-            """Extract loss from filenames like best_ema_model_1.6117_7856.pt."""
-            parts = Path(p).stem.split("_")
-            # Loss is the second-to-last part (last is epoch number)
-            try:
-                return float(parts[-2])
-            except (ValueError, IndexError):
-                return float("inf")
-
-        # Match original TabDiff: best_ema_model is the primary checkpoint.
-        # Fall back to best_model, then final_ema_model, then final_model.
-        ckpt_files = sorted(
-            glob.glob(os.path.join(ckpt_parent, "best_ema_model*")),
-            key=_by_loss,
-        )
-        if not ckpt_files:
-            ckpt_files = sorted(
-                glob.glob(os.path.join(ckpt_parent, "best_model_*")),
-                key=_by_loss,
-            )
-        if not ckpt_files:
-            ckpt_files = glob.glob(os.path.join(ckpt_parent, "final_ema_model*"))
-        if not ckpt_files:
-            ckpt_files = glob.glob(os.path.join(ckpt_parent, "final_model*"))
-        if not ckpt_files:
-            raise FileNotFoundError(
-                f"No TabDiff checkpoints found in {ckpt_parent}. "
-                "Train a model first."
-            )
-        ckpt_path = ckpt_files[0]
+        ckpt_path = _find_checkpoint(ckpt_parent)
 
     print(f"Sampling from checkpoint: {ckpt_path}")
 

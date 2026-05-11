@@ -152,11 +152,13 @@ def sample_dataset(
     samples_dir.mkdir(parents=True, exist_ok=True)
 
     # Find the model
-    model_path = checkpoint_dir / "final.pt"
+    model_path = checkpoint_dir / "best.pt"
     if not model_path.exists():
-        model_path = checkpoint_dir / "best.pt"
+        model_path = checkpoint_dir / "final.pt"
     if not model_path.exists():
         raise FileNotFoundError(f"No model found in {checkpoint_dir}")
+
+    print(f"Sampling for dataset {dataset} using model {model_path}...")
 
     # Determine sample count
     if n_train is None:

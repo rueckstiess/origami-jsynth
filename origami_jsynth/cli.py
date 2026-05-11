@@ -5,9 +5,13 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .baselines import MODEL_NAMES
 from .registry import DATASET_NAMES
+
+if TYPE_CHECKING:
+    from .sync import RemoteSync
 
 
 def _wandb_available() -> bool:
@@ -91,9 +95,8 @@ def _require_model(paths: dict[str, Path], args: argparse.Namespace) -> None:
 
 def _require_samples(paths: dict[str, Path], args: argparse.Namespace) -> None:
     """Check that synthetic samples exist, exit with helpful message if not."""
-    has_samples = (
-        paths["samples_dir"].exists()
-        and any(paths["samples_dir"].glob("synthetic_*.jsonl"))
+    has_samples = paths["samples_dir"].exists() and any(
+        paths["samples_dir"].glob("synthetic_*.jsonl")
     )
     if not has_samples:
         print(
@@ -104,6 +107,21 @@ def _require_samples(paths: dict[str, Path], args: argparse.Namespace) -> None:
             file=sys.stderr,
         )
         sys.exit(1)
+
+
+def _derive_log_dir(args: argparse.Namespace) -> Path | None:
+    """Return the per-combo log directory, or None if logging shouldn't apply.
+
+    Logging is enabled for commands that have both --dataset and --model
+    (i.e. all/train/sample/eval), not for data/results.
+    """
+    dataset = getattr(args, "dataset", None)
+    model = getattr(args, "model", None)
+    output_dir = getattr(args, "output_dir", None)
+    if not dataset or not model or not output_dir:
+        return None
+    dataset_name = f"{dataset}_dcr" if getattr(args, "dcr", False) else dataset
+    return Path(output_dir) / dataset_name / model
 
 
 def _parse_overrides(overrides: list[str]) -> dict:
@@ -171,9 +189,7 @@ def cmd_data(args: argparse.Namespace) -> None:
 
     train_df.to_csv(train_csv, index=False)
     test_df.to_csv(test_csv, index=False)
-    print(
-        f"Saved preprocessed CSVs ({df.shape[1]} columns) to {data_dir}"
-    )
+    print(f"Saved preprocessed CSVs ({df.shape[1]} columns) to {data_dir}")
 
 
 def cmd_train(args: argparse.Namespace) -> None:
@@ -283,7 +299,10 @@ def cmd_sample(args: argparse.Namespace) -> None:
                 print(f"Replicate {i}/{args.replicates}: sampling {n_train} records...")
                 records = synth.sample(n_train)
                 save_jsonl(records, output_path)
-                print(f"Replicate {i}/{args.replicates}: saved {len(records)} records to {output_path}")
+                print(
+                    f"Replicate {i}/{args.replicates}: "
+                    f"saved {len(records)} records to {output_path}"
+                )
 
 
 def cmd_eval(args: argparse.Namespace) -> None:
@@ -312,16 +331,24 @@ def cmd_overview(args: argparse.Namespace) -> None:
 
     # Fixed order matching generate_latex_tables.py
     datasets = ["adult", "diabetes", "electric_vehicles", "yelp", "ddxplus", "github_issues"]
-    models = ["tvae", "ctgan", "realtabformer", "mostlyai", "tabdiff", "origami"]
+    models = ["tabby", "tvae", "ctgan", "realtabformer", "mostlyai", "tabdiff", "origami"]
 
     model_labels = {
-        "origami": "Origami", "ctgan": "CTGAN", "tvae": "TVAE",
+        "tabby": "Tabby",
+        "origami": "Origami",
+        "ctgan": "CTGAN",
+        "tvae": "TVAE",
         "realtabformer": "REaLTabFormer",
-        "mostlyai": "TabularARGN", "tabdiff": "TabDiff",
+        "mostlyai": "TabularARGN",
+        "tabdiff": "TabDiff",
     }
     dataset_labels = {
-        "adult": "Adult", "diabetes": "Diabetes", "electric_vehicles": "Elec. Vehicles",
-        "ddxplus": "DDXPlus", "github_issues": "GitHub Issues", "yelp": "Yelp",
+        "adult": "Adult",
+        "diabetes": "Diabetes",
+        "electric_vehicles": "Elec. Vehicles",
+        "ddxplus": "DDXPlus",
+        "github_issues": "GitHub Issues",
+        "yelp": "Yelp",
     }
 
     def load_agg(dataset, model, dcr=False):
@@ -355,7 +382,12 @@ def cmd_overview(args: argparse.Namespace) -> None:
         ("tvae", "yelp"),
         ("tvae", "electric_vehicles"),
         ("realtabformer", "ddxplus"),
-        ("realtabformer", "github_issues")
+        ("realtabformer", "github_issues"),
+        ("tabby", "diabetes"),
+        ("tabby", "electric_vehicles"),
+        ("tabby", "yelp"),
+        ("tabby", "ddxplus"),
+        ("tabby", "github_issues"),
     }
 
     if args.latex:
@@ -391,7 +423,9 @@ def cmd_overview(args: argparse.Namespace) -> None:
 
     def print_count_table(title, counts):
         print(f"\n{title}")
-        header = "".ljust(ds_col_w) + "  ".join(model_labels.get(m, m).rjust(model_ws[m]) for m in models)
+        header = "".ljust(ds_col_w) + "  ".join(
+            model_labels.get(m, m).rjust(model_ws[m]) for m in models
+        )
         print(header)
         print("-" * len(header))
         for d in datasets:
@@ -427,8 +461,10 @@ def cmd_overview(args: argparse.Namespace) -> None:
 
         CYAN = "\033[36m"
         print(f"\n\n{CYAN}{BOLD}{title}{RESET}")
-        header = "".ljust(ds_col_w) + "".ljust(metric_col_w) + "  ".join(
-            model_labels.get(m, m).rjust(val_w) for m in models
+        header = (
+            "".ljust(ds_col_w)
+            + "".ljust(metric_col_w)
+            + "  ".join(model_labels.get(m, m).rjust(val_w) for m in models)
         )
         print(header)
         print("-" * len(header))
@@ -482,10 +518,11 @@ def _print_markdown_tables(datasets, models, model_labels, dataset_labels, data,
         ("Privacy", "privacy", "dcr"),
     ]
 
-    available_models = [m for m in models if any(
-        data[d].get(src, {}).get(m) for d in datasets
-        for src in ("base", "dcr")
-    )]
+    available_models = [
+        m
+        for m in models
+        if any(data[d].get(src, {}).get(m) for d in datasets for src in ("base", "dcr"))
+    ]
 
     for title, metric_key, source in metric_tables:
         print(f"\n### {title}\n")
@@ -531,6 +568,7 @@ def _print_latex_tables(datasets, models, model_labels, dataset_labels, data, oo
         "yelp": "Yelp",
     }
     latex_model_labels = {
+        "tabby": "Tabby",
         "tvae": "TVAE",
         "ctgan": "CTGAN",
         "realtabformer": "REaLTabFormer",
@@ -541,7 +579,8 @@ def _print_latex_tables(datasets, models, model_labels, dataset_labels, data, oo
 
     tables = {
         "fidelity": {
-            "caption": "Fidelity metrics across datasets (mean $\\pm$ std over 10 replicates). Higher is better.",
+            "caption": "Fidelity metrics across datasets "
+            "(mean $\\pm$ std over 3 replicates). Higher is better.",
             "label": "tab:fidelity",
             "source": "base",
             "metrics": [
@@ -552,20 +591,22 @@ def _print_latex_tables(datasets, models, model_labels, dataset_labels, data, oo
             "higher_is_better": True,
         },
         "utility": {
-            "caption": "Utility metrics across datasets (mean $\\pm$ std over 10 replicates). Higher is better.",
+            "caption": "Utility metrics across datasets (mean $\\pm$ std over 3 replicates). "
+            "Higher is better. Overall utility normalizes TSTR $F_1$ by the "
+            "corresponding real-data baseline.",
             "label": "tab:utility",
             "source": "base",
             "metrics": [
                 ("utility", "Overall score"),
-                ("utility_trtr_f1_weighted", "TRTR $F_1$"),
                 ("utility_tstr_f1_weighted", "TSTR $F_1$"),
             ],
             "higher_is_better": True,
         },
         "detection": {
-            "caption": "Detection metrics across datasets (mean $\\pm$ std over 10 replicates). "
+            "caption": "Detection metrics across datasets (mean $\\pm$ std over 3 replicates). "
             "Detection score: higher means harder to detect (better). "
-            "XGBoost classifier ROC AUC: lower means harder to distinguish from real data (better).",
+            "XGBoost classifier ROC AUC: lower means harder to distinguish "
+            "from real data (better).",
             "label": "tab:detection",
             "source": "base",
             "metrics": [
@@ -578,21 +619,19 @@ def _print_latex_tables(datasets, models, model_labels, dataset_labels, data, oo
             },
         },
         "privacy": {
-            "caption": "Privacy metrics across datasets (mean $\\pm$ std over 10 replicates, "
-            "3 replicates for DDXPlus). "
+            "caption": "Privacy metrics across datasets (mean $\\pm$ std over 3 replicates). "
             "Privacy score: higher is better. "
-            "DCR score $\\leq$ 50 indicates no memorization.",
+            "DCR score $\\leq$ 50 indicates no memorization. "
+            "Exact-match counts are discussed in the text.",
             "label": "tab:privacy",
             "source": "dcr",
             "metrics": [
                 ("privacy", "Overall score $\\uparrow$"),
                 ("privacy_dcr_score", "DCR $\\downarrow$"),
-                ("privacy_exact_matches_train", "Exact match $\\downarrow$"),
             ],
             "higher_is_better": {
                 "privacy": True,
                 "privacy_dcr_score": None,
-                "privacy_exact_matches_train": False,
             },
         },
     }
@@ -623,7 +662,11 @@ def _print_latex_tables(datasets, models, model_labels, dataset_labels, data, oo
                 if model_data is None or metric_key not in model_data:
                     continue
                 val = model_data[metric_key]["mean"]
-                if best_val is None or (direction and val > best_val) or (not direction and val < best_val):
+                if (
+                    best_val is None
+                    or (direction and val > best_val)
+                    or (not direction and val < best_val)
+                ):
                     best_val, best_models = val, [model]
                 elif val == best_val:
                     best_models.append(model)
@@ -639,7 +682,9 @@ def _print_latex_tables(datasets, models, model_labels, dataset_labels, data, oo
         source = table_cfg["source"]
         metrics = table_cfg["metrics"]
 
-        available_models = [m for m in models if any(m in data[ds].get(source, {}) for ds in datasets)]
+        available_models = [
+            m for m in models if any(m in data[ds].get(source, {}) for ds in datasets)
+        ]
         if not available_models:
             continue
 
@@ -682,10 +727,10 @@ def _print_latex_tables(datasets, models, model_labels, dataset_labels, data, oo
                         mean_val = model_data[metric_key]["mean"]
                         std_val = model_data[metric_key]["std"]
                         is_count = metric_key.startswith("privacy_exact_matches")
-                        is_best = is_primary and best_per_metric[metric_key].get(
-                            (ds, model), False
+                        is_best = is_primary and best_per_metric[metric_key].get((ds, model), False)
+                        row_parts.append(
+                            fmt_val(mean_val, std_val, is_count=is_count, bold=is_best)
                         )
-                        row_parts.append(fmt_val(mean_val, std_val, is_count=is_count, bold=is_best))
 
                 lines.append("    " + " & ".join(row_parts) + " \\\\")
 
@@ -726,7 +771,9 @@ def main() -> None:
         p.add_argument("--dataset", required=True, choices=DATASET_NAMES, help="Dataset name")
         p.add_argument("--output-dir", default="./results", help="Base output directory")
         p.add_argument(
-            "--model", default="origami", choices=MODEL_NAMES,
+            "--model",
+            default="origami",
+            choices=MODEL_NAMES,
             help="Synthesizer model (default: origami)",
         )
         p.add_argument(
@@ -773,7 +820,10 @@ def main() -> None:
     add_common_args(p_sample)
     p_sample.add_argument("--num-workers", type=int, default=4, help="Number of parallel workers")
     p_sample.add_argument(
-        "-R", "--replicates", type=int, default=1,
+        "-R",
+        "--replicates",
+        type=int,
+        default=1,
         help="Number of independent sampling rounds (default: 1)",
     )
     p_sample.add_argument(
@@ -793,8 +843,12 @@ def main() -> None:
     # results
     p_results = subparsers.add_parser("results", help="Show evaluation status and results overview")
     p_results.add_argument("--output-dir", default="./results", help="Base output directory")
-    p_results.add_argument("--latex", action="store_true", help="Output LaTeX tables instead of ASCII")
-    p_results.add_argument("--markdown", action="store_true", help="Output Markdown tables instead of ASCII")
+    p_results.add_argument(
+        "--latex", action="store_true", help="Output LaTeX tables instead of ASCII"
+    )
+    p_results.add_argument(
+        "--markdown", action="store_true", help="Output Markdown tables instead of ASCII"
+    )
     p_results.set_defaults(func=cmd_overview)
 
     # all
@@ -802,7 +856,10 @@ def main() -> None:
     add_common_args(p_all)
     p_all.add_argument("--num-workers", type=int, default=4, help="Number of parallel workers")
     p_all.add_argument(
-        "-R", "--replicates", type=int, default=1,
+        "-R",
+        "--replicates",
+        type=int,
+        default=1,
         help="Number of independent sampling rounds (default: 1)",
     )
     p_all.add_argument(
@@ -826,8 +883,15 @@ def main() -> None:
     p_all.set_defaults(func=cmd_all)
 
     args = parser.parse_args()
+    log_dir = _derive_log_dir(args)
     try:
-        args.func(args)
+        if log_dir is not None:
+            from ._logging import TeeLogger
+
+            with TeeLogger(log_dir, cmd_name=args.command):
+                args.func(args)
+        else:
+            args.func(args)
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
         sys.exit(130)

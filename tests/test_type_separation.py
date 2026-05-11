@@ -271,7 +271,7 @@ class TestSeparateMergeRoundtrip:
         for col in df.columns:
             if col not in merged.columns:
                 continue
-            for i, (orig, restored) in enumerate(zip(df[col], merged[col])):
+            for i, (orig, restored) in enumerate(zip(df[col], merged[col], strict=True)):
                 if orig is None:
                     assert restored is None, f"Row {i} col {col}: expected None, got {restored!r}"
                 elif isinstance(orig, float) and (orig != orig):  # NaN check
@@ -300,7 +300,7 @@ class TestEachTypeDense:
         df = pd.DataFrame({"v": [1.5, 2.7, 0.0, -3.14]})
         result = separate_types(df, force=True)
         merged = merge_types(result.df, result.column_map)
-        for orig, restored in zip([1.5, 2.7, 0.0, -3.14], merged["v"]):
+        for orig, restored in zip([1.5, 2.7, 0.0, -3.14], merged["v"], strict=True):
             assert abs(orig - restored) < 1e-9
 
     def test_cat_dense(self):
@@ -365,7 +365,7 @@ class TestEachTypeWithMissing:
 
     def _check_non_missing(self, orig_vals, merged_col):
         """Assert that non-missing original values survive the roundtrip."""
-        for i, (orig, restored) in enumerate(zip(orig_vals, merged_col)):
+        for i, (orig, restored) in enumerate(zip(orig_vals, merged_col, strict=True)):
             if orig is None or (isinstance(orig, float) and orig != orig):
                 continue  # null/missing — don't assert exact value
             assert orig == restored, f"Row {i}: expected {orig!r}, got {restored!r}"

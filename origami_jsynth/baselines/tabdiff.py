@@ -358,6 +358,7 @@ class TabDiffAdapter:
             _wandb.init(
                 project="origami-jsynth",
                 name=f"tabdiff-{dataset}" if dataset else "tabdiff",
+                reinit="finish_previous",
                 config=config_overrides or self.kwargs,
                 group=dataset or None,
                 job_type="train",

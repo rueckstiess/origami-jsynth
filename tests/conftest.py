@@ -13,7 +13,9 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
-    config.addinivalue_line("markers", "slow: marks tests as slow (skip unless --run-slow is passed)")
+    config.addinivalue_line(
+        "markers", "slow: marks tests as slow (skip unless --run-slow is passed)"
+    )
 
 
 def pytest_collection_modifyitems(config, items):

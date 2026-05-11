@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 import time
 from pathlib import Path
 from typing import Any
@@ -74,6 +75,7 @@ class WandbCallback(TrainerCallback):
             name=self.name,
             id=self.run_id,
             resume="allow",
+            reinit="finish_previous",
             config=self.config,
             group=self.group,
             job_type="train",
@@ -143,6 +145,21 @@ class CheckpointCallback(TrainerCallback):
         if self.save_every_epoch > 0 and (state.epoch + 1) % self.save_every_epoch == 0:
             path = self.checkpoint_dir / f"epoch_{state.epoch + 1}.pt"
             self.pipeline.save(path, include_training_state=True)
+
+
+def split_train_eval(records: list[dict], seed: int) -> tuple[list[dict], list[dict]]:
+    """Split a 10%-overall eval set off records that are already 90% overall.
+
+    The data stage produces a 90/10 train/test split of the original dataset
+    on disk (train.jsonl is 90%, test.jsonl is 10%). This helper carves a
+    further 10%-overall validation slice out of train.jsonl, leaving an 80%
+    fit set — matching the 80/10/10 split reported in the paper.
+    """
+    eval_size = max(1, round(len(records) / 9))
+    rng = random.Random(seed)
+    shuffled = list(records)
+    rng.shuffle(shuffled)
+    return shuffled[eval_size:], shuffled[:eval_size]
 
 
 def find_latest_checkpoint(checkpoint_dir: Path) -> Path | None:
@@ -223,11 +240,15 @@ def train_dataset(
 
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load data
-    train_records = load_jsonl(data_dir / "train.jsonl")
-    eval_records = load_jsonl(data_dir / "test.jsonl")
+    # Load data and carve a 10%-overall validation slice off train.jsonl
+    # (test.jsonl is held out for downstream evaluation, not for training).
+    all_train_records = load_jsonl(data_dir / "train.jsonl")
+    train_records, eval_records = split_train_eval(all_train_records, seed)
     print(f"Dataset: {dataset}")
-    print(f"Train: {len(train_records)} records, Eval: {len(eval_records)} records")
+    print(
+        f"Train: {len(train_records)} records, Eval: {len(eval_records)} records "
+        f"(split from {len(all_train_records)} train records)"
+    )
 
     # Load config
     with open(config_path) as f:

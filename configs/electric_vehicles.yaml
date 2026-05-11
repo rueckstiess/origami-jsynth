@@ -21,6 +21,7 @@ training:
   constrain_schema: true
   dataloader_num_workers: 0
   mixed_precision: "no"
+  use_accelerate: false
   eval_epochs: 1
   eval_sample_size: 1000
   eval_strategy: epoch

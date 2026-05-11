@@ -180,4 +180,5 @@ class TestEncodeFeatures:
         num_enc_cols = [c for c in encoded.columns if c.endswith(".num")]
         for col in num_enc_cols:
             import numpy as np
+
             assert not np.isinf(encoded[col].dropna()).any()

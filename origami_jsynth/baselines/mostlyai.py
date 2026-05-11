@@ -27,7 +27,9 @@ class MostlyAIAdapter:
         self._model: Any = None
         self._state: PreprocessingState | None = None
 
-    def fit(self, records: list[dict[str, Any]], max_seconds: float | None = None, **kwargs: Any) -> None:
+    def fit(
+        self, records: list[dict[str, Any]], max_seconds: float | None = None, **kwargs: Any
+    ) -> None:
         try:
             from mostlyai.engine import TabularARGN
         except ImportError:
